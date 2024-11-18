@@ -1,5 +1,5 @@
 [workspace]
 members = [
-    "src/central-server",
     "src/common",
+    "src/central-server",
 ]
