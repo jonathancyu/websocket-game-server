@@ -19,6 +19,7 @@ async fn root() -> &'static str {
 }
 
 async fn join_queue(Json(payload): Json<QueueRequest>) -> (StatusCode, Json<String>) {
+    // TODO: JWT to validate user
     let result = format!("hi {}", payload.user_id);
     (StatusCode::OK, Json(result))
 }
