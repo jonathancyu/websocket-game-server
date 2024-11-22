@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 
+type SocketHandle = {
+    messages: string[],
+    sendMessage: (message: string) => void
+};
 const useWebSocket = (url: string) => {
     const [messages, setMessages] = useState<string[]>([]);
     const [ws, setWs] = useState<WebSocket | null>(null);
@@ -52,3 +56,4 @@ export default function Queue() {
 
     )
 }
+
