@@ -1,5 +1,3 @@
-import reactHooks from "eslint-plugin-react-hooks";
-import { fixupPluginRules } from "@eslint/compat";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import js from "@eslint/js";
@@ -14,10 +12,6 @@ const compat = new FlatCompat({
 });
 
 export default [...compat.extends("next/core-web-vitals", "next/typescript"), {
-    plugins: {
-        "react-hooks": fixupPluginRules(reactHooks),
-    },
-
     rules: {
         "react-hooks/rules-of-hooks": "error",
         "react-hooks/exhaustive-deps": "warn",
