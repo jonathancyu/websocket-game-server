@@ -1,17 +1,21 @@
 use std::{
     net::{Ipv6Addr, SocketAddr},
-    sync::{mpsc, Arc, Mutex},
+    sync::Arc,
 };
 
-use axum::{http::StatusCode, Json};
 use futures_util::{SinkExt, StreamExt};
-use serde::Deserialize;
 use server::{
-    model::messages::{QueueMessage, Request, Response},
+    model::messages::{
+        ClientRequest, ClientResponse, MatchmakingRequest, MatchmakingResponse, QueuedPlayer,
+    },
     service::matchmaking::MatchmakingService,
 };
 use tokio::{
     net::{TcpListener, TcpStream},
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        Mutex,
+    },
     task::JoinHandle,
 };
 use tokio_tungstenite::{
@@ -24,7 +28,7 @@ use tracing::{debug, error, info};
 async fn main() {
     let subscriber = tracing_subscriber::FmtSubscriber::new();
     let _ = tracing::subscriber::set_global_default(subscriber);
-    let (sender, receiver) = mpsc::channel::<QueueMessage>();
+    let (sender, receiver) = mpsc::channel(100);
     let sender = Arc::new(Mutex::new(sender));
     let receiver = Arc::new(Mutex::new(receiver));
     // Spawn thread for matchmaking
@@ -49,7 +53,7 @@ async fn main() {
 }
 
 async fn websocket_listener(
-    sender: Arc<Mutex<mpsc::Sender<QueueMessage>>>,
+    mm_sender: Arc<Mutex<Sender<MatchmakingRequest>>>,
 ) -> Result<(), &'static str> {
     let url = "0.0.0.0".to_owned();
     let queue_socket_port = "3001".to_owned();
@@ -60,7 +64,11 @@ async fn websocket_listener(
     info!("Initialized ws listener: {}", addr);
     while let Ok((stream, address)) = ws_listener.accept().await {
         info!("Got something");
-        tokio::spawn(handle_websocket_connection(stream, address, sender.clone()));
+        tokio::spawn(handle_websocket_connection(
+            stream,
+            address,
+            mm_sender.clone(),
+        ));
     }
     info!("Exited ws listener");
 
@@ -68,48 +76,53 @@ async fn websocket_listener(
 }
 
 async fn matchmaking_thread(
-    receiver: Arc<Mutex<mpsc::Receiver<QueueMessage>>>,
+    receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
 ) -> Result<(), &'static str> {
-    let mut service = MatchmakingService::new();
-    let receiver = receiver.lock().unwrap();
-    info!("Initialized matchmaking service");
-    while let Ok(message) = receiver.recv() {
-        info!("got {:?}", message);
-        let _ = service.add_user(message);
-    }
+    // Create new matchmaking service and subscribe to queue channel
+    MatchmakingService::new().listen(receiver).await;
     Ok(())
 }
 
 async fn handle_websocket_connection(
     stream: TcpStream,
     address: SocketAddr,
-    sender: Arc<Mutex<mpsc::Sender<QueueMessage>>>,
+    mm_sender: Arc<Mutex<mpsc::Sender<MatchmakingRequest>>>,
 ) {
     info!("New ws connection: {}", address);
     // TODO: implement with protobuf (prost)
-    let ws_stream = accept_async(stream).await.unwrap();
-    let (mut ws_sender, mut ws_receiver) = ws_stream.split();
+    let stream = accept_async(stream).await.unwrap();
+    let (mut ws_sender, mut ws_receiver) = stream.split();
     while let Some(msg) = ws_receiver.next().await {
         let msg: Message = msg.unwrap();
         if msg.is_text() {
             debug!("Got message {:?}", &msg);
+            // Deserialize request
             let body = msg.to_text().unwrap();
             let request = serde_json::from_str(body);
-            let response: Response = match request {
+            let (handle_sender, _handle_receiver) = mpsc::channel::<MatchmakingResponse>(100);
+
+            // NOTE: there must be a better way
+            let response: ClientResponse = match request {
                 Ok(request) => match request {
-                    Request::JoinQueue { user_id } => {
-                        match sender.lock().unwrap().send(QueueMessage { user_id }) {
-                            Ok(_) => Response::JoinedQueue,
-                            Err(message) => Response::Error {
+                    ClientRequest::JoinQueue { user_id } => {
+                        let mm_request = MatchmakingRequest::JoinQueue(QueuedPlayer {
+                            id: user_id,
+                            sender: handle_sender,
+                        });
+                        let mm_sender = mm_sender.lock().await;
+
+                        match mm_sender.send(mm_request).await {
+                            Ok(_) => ClientResponse::JoinedQueue,
+                            Err(message) => ClientResponse::Error {
                                 message: message.to_string(),
                             },
                         }
                     }
-                    Request::GetServer { user_id: _ } => Response::JoinServer {
+                    ClientRequest::GetServer { user_id: _ } => ClientResponse::JoinServer {
                         server_ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
                     },
                 },
-                Err(_) => Response::Error {
+                Err(_) => ClientResponse::Error {
                     message: "Could not deserialize request".to_string(),
                 },
             };
@@ -118,19 +131,4 @@ async fn handle_websocket_connection(
             ws_sender.send(Message::Text(response)).await.unwrap();
         }
     }
-}
-
-async fn root() -> &'static str {
-    "Hello world"
-}
-
-async fn join_queue(Json(payload): Json<QueueRequest>) -> (StatusCode, Json<String>) {
-    // TODO: JWT to validate user
-    let result = format!("hi {}", payload.user_id);
-    (StatusCode::OK, Json(result))
-}
-
-#[derive(Deserialize)]
-struct QueueRequest {
-    pub user_id: u64,
 }

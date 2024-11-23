@@ -1,9 +1,10 @@
-use std::{fmt::Display, net::Ipv6Addr};
+use std::net::Ipv6Addr;
 
-use serde::{de, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::Sender;
 use uuid::Uuid;
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct UserId(pub Uuid);
 
 impl<'de> Deserialize<'de> for UserId {
@@ -16,16 +17,34 @@ impl<'de> Deserialize<'de> for UserId {
         Ok(UserId(uuid))
     }
 }
+// Message types used for inter-thread communication
+#[derive(Debug, Clone)]
+pub struct MatchDetails {}
 
-#[derive(Debug, Hash, Eq, PartialEq)]
-pub struct QueueMessage {
-    pub user_id: UserId,
+#[derive(Debug, Clone)]
+pub enum MatchmakingRequest {
+    JoinQueue(QueuedPlayer),
+    LeaveQueue(String),
+    Exit,
+}
+
+#[derive(Debug, Clone)]
+pub enum MatchmakingResponse {
+    QueueJoined,
+    MatchFound(MatchDetails),
+}
+
+// Message types for the matchmaking thread
+#[derive(Debug, Clone)]
+pub struct QueuedPlayer {
+    pub id: UserId,
+    pub sender: Sender<MatchmakingResponse>,
 }
 
 // API Request/response
 
 #[derive(Deserialize)]
-pub enum Request {
+pub enum ClientRequest {
     // Add user to queue
     JoinQueue { user_id: UserId },
     // User was disconnected from the match, and needs the server address again
@@ -33,7 +52,7 @@ pub enum Request {
 }
 
 #[derive(Serialize)]
-pub enum Response {
+pub enum ClientResponse {
     // Ack user joining queue
     JoinedQueue,
     // Constant ping to let user know still connected
