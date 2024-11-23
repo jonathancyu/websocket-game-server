@@ -8,6 +8,7 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::{
+        broadcast,
         mpsc::{self, Receiver, Sender},
         Mutex,
     },
@@ -55,6 +56,7 @@ impl WebSocketHandler {
 
     pub async fn listen(
         &mut self,
+        shutdown_receiver: &mut broadcast::Receiver<()>,
         mm_sender: Sender<MatchmakingRequest>,
         mm_listener: Arc<Mutex<Receiver<MatchmakingResponse>>>,
     ) {
@@ -66,16 +68,29 @@ impl WebSocketHandler {
                 panic!("Failed to bind to {}: {}", address, e);
             });
         info!("Initialized ws listener: {}", address);
-        while let Ok((stream, address)) = ws_listener.accept().await {
-            info!("Got something");
-            tokio::spawn(WebSocketHandler::handle_connection(
-                self.state.clone(),
-                stream,
-                address,
-                mm_sender.clone(),
-            ));
+        loop {
+            tokio::select! {
+                result = ws_listener.accept() => {
+                    match result {
+                        Err(e) => {
+                            error!("Failed to accept connection from {} with error: {}", address, e);
+                        }
+                        Ok((stream, address)) => {
+                            tokio::spawn(WebSocketHandler::handle_connection(
+                                self.state.clone(),
+                                stream,
+                                address,
+                                mm_sender.clone(),
+                            ));
+                        }
+                    }
+                },
+                _ = shutdown_receiver.recv() => {
+                    break;
+                }
+            };
         }
-        info!("Exited ws listener");
+        info!("Exited s listener");
     }
 
     async fn handle_connection(
@@ -89,7 +104,29 @@ impl WebSocketHandler {
         let stream = accept_async(stream).await.unwrap();
         let (mut ws_sender, mut ws_receiver) = stream.split();
         loop {
-            let msg = ws_receiver.next().await.unwrap();
+            let mut state = state.lock().await;
+            state
+                .user_handles
+                .entry(address)
+                .or_insert_with(|| Connection {
+                    id: UserId(Uuid::new_v4()),
+                    mm_to_ws: Channel::from(mpsc::channel(100)),
+                });
+            let connection = state.user_handles.get(&address).unwrap();
+            let msg = ws_receiver.next().await;
+            let msg = match msg {
+                None => {
+                    error!("Websocket closed");
+                    // TODO: Likely should be handled on the matchmaking end
+                    mm_sender
+                        .send(MatchmakingRequest::LeaveQueue(connection.id.clone()))
+                        .await
+                        .expect("Failed to send leave queue");
+                    break;
+                }
+                Some(msg) => msg,
+            };
+
             let Ok(msg) = msg else {
                 error!("Error on msg: {:?}", msg);
                 break;
@@ -99,16 +136,6 @@ impl WebSocketHandler {
                 // Deserialize request
                 let body = msg.to_text().unwrap();
                 let request = serde_json::from_str(body).expect("Could not deserialize request.");
-
-                let mut state = state.lock().await;
-                state
-                    .user_handles
-                    .entry(address)
-                    .or_insert_with(|| Connection {
-                        id: UserId(Uuid::new_v4()),
-                        mm_to_ws: Channel::from(mpsc::channel(100)),
-                    });
-                let connection = state.user_handles.get(&address).unwrap();
 
                 let response = match request {
                     ClientRequest::JoinQueue { user_id } => {
@@ -126,10 +153,7 @@ impl WebSocketHandler {
                 };
                 let response =
                     serde_json::to_string(&response).expect("Could not serialize response.");
-                // NOTE: there must be a better way
-
                 ws_sender.send(Message::Text(response)).await.unwrap();
-                info!("Done with connection {}", address);
             }
         }
     }

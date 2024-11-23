@@ -24,7 +24,7 @@ pub struct MatchDetails {}
 #[derive(Debug, Clone)]
 pub enum MatchmakingRequest {
     JoinQueue(QueuedPlayer),
-    LeaveQueue(String),
+    LeaveQueue(UserId),
     Exit,
 }
 

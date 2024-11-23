@@ -5,6 +5,7 @@ use std::{
 };
 
 use tokio::sync::{
+    broadcast,
     mpsc::{Receiver, Sender},
     Mutex,
 };
@@ -39,6 +40,7 @@ impl MatchmakingService {
 
     pub async fn listen(
         &mut self,
+        shutdown_receiver: &mut broadcast::Receiver<()>,
         ws_sender: Sender<MatchmakingResponse>,
         ws_receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
     ) {
@@ -46,24 +48,42 @@ impl MatchmakingService {
         info!("Initialized matchmaking service");
         loop {
             // Listen for queue join messages
-            let message = receiver.recv().await;
-            match message.unwrap() {
-                MatchmakingRequest::JoinQueue(player) => {
-                    info!("got {:?}", player);
-                    let sender = player.sender.clone();
-                    if sender.is_closed() {
-                        warn!("Sender {:?} is closed!", player.id);
-                    }
-                    let _ = self.add_user(player);
-                    let result = sender.send(MatchmakingResponse::QueueJoined).await;
-                    if let Err(err) = result {
-                        error!("Got error when sending MatchmakingResponse: {}", err);
-                    }
+            tokio::select! {
+                _ = shutdown_receiver.recv() => {
+                    break;
                 }
-                MatchmakingRequest::LeaveQueue(_) => todo!(),
-                MatchmakingRequest::Exit => break,
-            };
+                message = receiver.recv() => {
+                    match message.unwrap() {
+                        MatchmakingRequest::JoinQueue(player) => {
+                            info!("got {:?}", player);
+                            let sender = player.sender.clone();
+                            if sender.is_closed() {
+                                warn!("Sender {:?} is closed!", player.id);
+                            }
+                            let _ = self.add_user(player);
+                            let result = sender.send(MatchmakingResponse::QueueJoined).await;
+                            if let Err(err) = result {
+                                error!("Got error when sending MatchmakingResponse: {}", err);
+                            }
+                        }
+                        MatchmakingRequest::LeaveQueue(user_id) => {
+                            if self.users_in_queue.contains(&user_id) {
+                                for (i, user) in self.queue.iter().enumerate() {
+                                    if user.id == user_id {
+                                        self.queue.remove(i);
+                                        info!("Removing user {:?} from queue", user_id);
+                                        return;
+                                    }
+                                }
+                                warn!("User {:?} was not i queue", user_id);
+                            }
+                        }
+                        MatchmakingRequest::Exit => break,
+                    };
+                },
+            }
         }
+        info!("Exiting matchmaking service");
     }
 }
 
