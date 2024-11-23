@@ -1,1 +1,1 @@
-pub mod queue_socket;
+pub mod channel;

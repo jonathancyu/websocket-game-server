@@ -4,7 +4,7 @@ use std::{
 };
 
 use tokio::sync::{
-    mpsc::{self, Receiver},
+    mpsc::{Receiver, Sender},
     Mutex,
 };
 use tracing::{error, info};
@@ -36,7 +36,11 @@ impl MatchmakingService {
         }
     }
 
-    pub async fn listen(&mut self, receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>) {
+    pub async fn listen(
+        &mut self,
+        sender: Arc<Mutex<Sender<MatchmakingResponse>>>,
+        receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
+    ) {
         let mut receiver = receiver.lock().await;
         info!("Initialized matchmaking service");
         loop {
@@ -48,8 +52,8 @@ impl MatchmakingService {
                     let sender = player.sender.clone();
                     let _ = self.add_user(player);
                     let result = sender.send(MatchmakingResponse::QueueJoined).await;
-                    if result.is_err() {
-                        error!("Got error when sending MatchmakingResponse");
+                    if let Err(err) = result {
+                        error!("Got error when sending MatchmakingResponse: {}", err);
                     }
                 }
                 MatchmakingRequest::LeaveQueue(_) => todo!(),
