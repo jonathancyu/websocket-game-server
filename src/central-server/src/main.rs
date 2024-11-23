@@ -16,7 +16,7 @@ async fn main() {
             .await;
     });
     let websocket_handle: JoinHandle<()> = tokio::spawn(async move {
-        WebSocketHandler::new()
+        WebSocketHandler::new("0.0.0.0".to_owned(), "3001".to_owned())
             .listen(to_mm_channel.sender, to_ws_channel.receiver)
             .await;
     });

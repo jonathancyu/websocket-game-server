@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     net::{Ipv6Addr, SocketAddr},
     sync::Arc,
 };
@@ -12,33 +13,63 @@ use tokio::{
     },
 };
 use tokio_tungstenite::{accept_async, tungstenite::Message};
-use tracing::{debug, info};
+use tracing::{debug, error, info, warn};
+use uuid::Uuid;
 
-use crate::model::messages::{
-    ClientRequest, ClientResponse, MatchmakingRequest, MatchmakingResponse, QueuedPlayer,
+use crate::{
+    model::messages::{
+        ClientRequest, ClientResponse, MatchmakingRequest, MatchmakingResponse, QueuedPlayer,
+        UserId,
+    },
+    utility::channel::Channel,
 };
 
-pub struct WebSocketHandler {}
+struct Connection {
+    id: UserId,
+    mm_to_ws: Channel<MatchmakingResponse>,
+}
+
+struct WebSocketState {
+    user_handles: HashMap<SocketAddr, Connection>,
+}
+impl WebSocketState {}
+
+pub struct WebSocketHandler {
+    pub url: String,
+    pub port: String,
+    state: Arc<Mutex<WebSocketState>>,
+}
 impl WebSocketHandler {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(url: String, port: String) -> Self {
+        Self {
+            url,
+            port,
+            state: Arc::new(Mutex::new(WebSocketState {
+                user_handles: HashMap::new(),
+            })),
+        }
+    }
+    fn format_address(&self) -> String {
+        format!("{}:{}", self.url, self.port)
     }
 
     pub async fn listen(
-        &self,
-        mm_sender: Arc<Mutex<Sender<MatchmakingRequest>>>,
+        &mut self,
+        mm_sender: Sender<MatchmakingRequest>,
         mm_listener: Arc<Mutex<Receiver<MatchmakingResponse>>>,
     ) {
-        let url = "0.0.0.0".to_owned();
-        let queue_socket_port = "3001".to_owned();
-        let addr = format!("{}:{}", url, queue_socket_port);
-        let ws_listener = TcpListener::bind(addr.clone()).await.unwrap_or_else(|e| {
-            panic!("Failed to bind to {}: {}", addr, e);
-        });
-        info!("Initialized ws listener: {}", addr);
+        // TODO: Implement polling mm listener
+        let address = self.format_address();
+        let ws_listener = TcpListener::bind(address.clone())
+            .await
+            .unwrap_or_else(|e| {
+                panic!("Failed to bind to {}: {}", address, e);
+            });
+        info!("Initialized ws listener: {}", address);
         while let Ok((stream, address)) = ws_listener.accept().await {
             info!("Got something");
             tokio::spawn(WebSocketHandler::handle_connection(
+                self.state.clone(),
                 stream,
                 address,
                 mm_sender.clone(),
@@ -48,52 +79,56 @@ impl WebSocketHandler {
     }
 
     async fn handle_connection(
+        state: Arc<Mutex<WebSocketState>>,
         stream: TcpStream,
         address: SocketAddr,
-        mm_sender: Arc<Mutex<mpsc::Sender<MatchmakingRequest>>>,
+        mm_sender: Sender<MatchmakingRequest>,
     ) {
         info!("New ws connection: {}", address);
         // TODO: implement with protobuf (prost)
         let stream = accept_async(stream).await.unwrap();
         let (mut ws_sender, mut ws_receiver) = stream.split();
-        while let Some(msg) = ws_receiver.next().await {
-            let msg: Message = msg.unwrap();
+        loop {
+            let msg = ws_receiver.next().await.unwrap();
+            let Ok(msg) = msg else {
+                error!("Error on msg: {:?}", msg);
+                break;
+            };
             if msg.is_text() {
                 debug!("Got message {:?}", &msg);
                 // Deserialize request
                 let body = msg.to_text().unwrap();
-                let request = serde_json::from_str(body);
-                let (handle_sender, _handle_receiver) = mpsc::channel::<MatchmakingResponse>(100);
+                let request = serde_json::from_str(body).expect("Could not deserialize request.");
 
-                // NOTE: there must be a better way
-                let response: ClientResponse = match request {
-                    Ok(request) => match request {
-                        ClientRequest::JoinQueue { user_id } => {
-                            let mm_request = MatchmakingRequest::JoinQueue(QueuedPlayer {
-                                id: user_id,
-                                sender: handle_sender,
-                            });
-                            let mm_sender = mm_sender.lock().await;
+                let mut state = state.lock().await;
+                state
+                    .user_handles
+                    .entry(address)
+                    .or_insert_with(|| Connection {
+                        id: UserId(Uuid::new_v4()),
+                        mm_to_ws: Channel::from(mpsc::channel(100)),
+                    });
+                let connection = state.user_handles.get(&address).unwrap();
 
-                            match mm_sender.send(mm_request).await {
-                                Ok(_) => ClientResponse::JoinedQueue,
-                                Err(message) => ClientResponse::Error {
-                                    message: message.to_string(),
-                                },
-                            }
-                        }
-                        ClientRequest::GetServer { user_id: _ } => ClientResponse::JoinServer {
-                            server_ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
-                        },
-                    },
-                    Err(_) => ClientResponse::Error {
-                        message: "Could not deserialize request".to_string(),
+                let response = match request {
+                    ClientRequest::JoinQueue { user_id } => {
+                        let mm_request = MatchmakingRequest::JoinQueue(QueuedPlayer {
+                            id: user_id.clone(),
+                            sender: connection.mm_to_ws.sender.clone(),
+                        });
+                        mm_sender.send(mm_request).await.unwrap();
+                        ClientResponse::JoinedQueue
+                    }
+                    ClientRequest::GetServer { user_id: _ } => ClientResponse::JoinServer {
+                        server_ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
                     },
                 };
                 let response =
-                    serde_json::to_string(&response).expect("Could not SERIALIZE value :(");
+                    serde_json::to_string(&response).expect("Could not serialize response.");
+                // NOTE: there must be a better way
 
                 ws_sender.send(Message::Text(response)).await.unwrap();
+                info!("Done with connection {}", address);
             }
         }
     }

@@ -1,3 +1,4 @@
+use core::error;
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
@@ -7,7 +8,7 @@ use tokio::sync::{
     mpsc::{Receiver, Sender},
     Mutex,
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::model::messages::{MatchmakingRequest, MatchmakingResponse, QueuedPlayer, UserId};
 
@@ -38,10 +39,10 @@ impl MatchmakingService {
 
     pub async fn listen(
         &mut self,
-        sender: Arc<Mutex<Sender<MatchmakingResponse>>>,
-        receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
+        ws_sender: Sender<MatchmakingResponse>,
+        ws_receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
     ) {
-        let mut receiver = receiver.lock().await;
+        let mut receiver = ws_receiver.lock().await;
         info!("Initialized matchmaking service");
         loop {
             // Listen for queue join messages
@@ -50,6 +51,9 @@ impl MatchmakingService {
                 MatchmakingRequest::JoinQueue(player) => {
                     info!("got {:?}", player);
                     let sender = player.sender.clone();
+                    if sender.is_closed() {
+                        warn!("Sender {:?} is closed!", player.id);
+                    }
                     let _ = self.add_user(player);
                     let result = sender.send(MatchmakingResponse::QueueJoined).await;
                     if let Err(err) = result {

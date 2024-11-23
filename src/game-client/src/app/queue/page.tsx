@@ -83,7 +83,8 @@ export default function Queue() {
 
     // Close listener
     webSocket.onclose = (event) => {
-      console.log("Closed websocket");
+      console.log("Closed websocket " + user_id);
+      setMessages([])
     };
 
     setSocket(webSocket);
