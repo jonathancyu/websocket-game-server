@@ -10,7 +10,10 @@ use server::{
     model::messages::{QueueMessage, Request, Response},
     service::matchmaking::MatchmakingService,
 };
-use tokio::net::{TcpListener, TcpStream};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    task::JoinHandle,
+};
 use tokio_tungstenite::{
     accept_async,
     tungstenite::{Message, Result},
@@ -24,10 +27,15 @@ async fn main() {
     let (sender, receiver) = mpsc::channel::<QueueMessage>();
     let sender = Arc::new(Mutex::new(sender));
     let receiver = Arc::new(Mutex::new(receiver));
-    let result = tokio::try_join!(
-        websocket_listener(sender.clone()),
+    // Spawn thread for matchmaking
+    let matchmaker_handle: JoinHandle<()> = tokio::spawn(async move {
         matchmaking_thread(receiver.clone())
-    );
+            .await
+            .expect("Error in matchmaking thread");
+    });
+
+    // Listen for websocket connections
+    let result = tokio::try_join!(websocket_listener(sender.clone()),);
     match result {
         Ok(_) => {}
         Err(err) => {
@@ -35,16 +43,9 @@ async fn main() {
         }
     }
 
-    // Websockets thread
-
-    // REST endpoints
-    // let app: Router = Router::new()
-    //     .route("/", get(root))
-    //     .route("/join_queue", post(join_queue));
-    // let listener = tokio::net::TcpListener::bind(url.to_owned() + ":3000")
-    //     .await
-    //     .unwrap();
-    // axum::serve(listener, app).await.unwrap();
+    matchmaker_handle
+        .await
+        .expect("Matchmaking thread exited non-gracefully");
 }
 
 async fn websocket_listener(
@@ -52,13 +53,16 @@ async fn websocket_listener(
 ) -> Result<(), &'static str> {
     let url = "0.0.0.0".to_owned();
     let queue_socket_port = "3001".to_owned();
-    let ws_listener = TcpListener::bind(format!("{}:{}", url, queue_socket_port))
-        .await
-        .unwrap();
-    info!("Initialized ws listener");
+    let addr = format!("{}:{}", url, queue_socket_port);
+    let ws_listener = TcpListener::bind(addr.clone()).await.unwrap_or_else(|e| {
+        panic!("Failed to bind to {}: {}", addr, e);
+    });
+    info!("Initialized ws listener: {}", addr);
     while let Ok((stream, address)) = ws_listener.accept().await {
+        info!("Got something");
         tokio::spawn(handle_websocket_connection(stream, address, sender.clone()));
     }
+    info!("Exited ws listener");
 
     Ok(())
 }
@@ -70,6 +74,7 @@ async fn matchmaking_thread(
     let receiver = receiver.lock().unwrap();
     info!("Initialized matchmaking service");
     while let Ok(message) = receiver.recv() {
+        print!("got {:?}", message);
         let _ = service.add_user(message);
     }
     Ok(())

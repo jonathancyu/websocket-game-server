@@ -1,12 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useEffect, useState } from "react";
-
-type SocketHandle = {
-  messages: string[];
-  sendMessage: (message: string) => void;
-};
+import { useCallback, useEffect, useState } from "react";
 
 const useWebSocket = (url: string) => {
   const [messages, setMessages] = useState<string[]>([]);
@@ -47,75 +42,70 @@ type JoinQueue = {
 
 export default function Queue() {
   const [user_id] = useState(() => crypto.randomUUID());
-  // const [socketHandle, setSocketHandle] = useState<SocketHandle | null>(null);
-  // const { messages, sendMessage } = useWebSocket("ws://localhost:3001");
   const [inQueue, setInQueue] = useState<boolean>(false);
-  const [queueSocket, setQueueSocket] = useState<WebSocket | null>(null);
+  const [messages, setMessages] = useState<string[]>([]);
 
-  // function joinQueue() {
-  //   if (socketHandle == null) {
-  //     console.log("Socket handle null");
-  //     return;
-  //   }
-  //   const request: JoinQueue = {
-  //     JoinQueue: {
-  //       user_id: user_id,
-  //     },
-  //   };
-  //   const payload = JSON.stringify(request);
-  //   socketHandle.sendMessage(payload);
-  //   console.log("Sent " + payload);
   useEffect(() => {
-    if (inQueue) {
-      if (queueSocket !== null) {
-        // Queue websocket is already established, do nothing
-        return;
-      }
-      // Try to join queue
-
-      try {
-        const socket = new WebSocket("ws://localhost:3001");
-
-        socket.onerror = (error) => {
-          console.error("WebSocket error:", error);
-          setQueueSocket(null);
-        };
-
-        socket.onclose = () => {
-          console.log("WebSocket connection closed");
-          setQueueSocket(null);
-        };
-
-        socket.onopen = () => {
-          console.log("WebSocket connection established");
-        };
-      } catch (error) {
-        console.error("Failed to create WebSocket connection:", error);
-        setInQueue(false);
-        setQueueSocket(null);
-      }
+    if (!inQueue) {
+      console.log("Left queue");
     }
-  }, [queueSocket, inQueue]);
+    console.log("In queue!");
 
-  function joinQueue() {
-    const request: JoinQueue = {
-      JoinQueue: {
-        user_id: user_id,
-      },
+    // Try to join websocket
+    // BUG: Is it possible to already have a socket established?
+    const socket = new WebSocket("ws://localhost:3001");
+    if (socket == null) {
+      console.error("Socket is null");
+      return;
+    }
+
+    // Send join queue message on open
+    socket.onopen = () => {
+      const payload = JSON.stringify({
+        JoinQueue: {
+          user_id: user_id,
+        },
+      } satisfies JoinQueue);
+      console.log("Sent " + payload);
+      socket.send(payload);
     };
-    const payload = JSON.stringify(request);
-    socketHandle.sendMessage(payload);
-    console.log("Sent " + payload);
-  }
+    socket.onerror = (event: Event) => {
+      console.error("Failed to establish websocket: " + event);
+    };
+
+    // Add message listener
+    socket.onmessage = (event) => {
+      setMessages((previous) => [...previous, event.data]);
+    };
+  }, [user_id, inQueue]);
+
   function connect() {
+    console.log("Set queue true");
     setInQueue(true);
   }
 
   return (
-    <div className="m-2 space-x-10">
-      <button className="bg-blue-50 text-black" onClick={connect}>
-        Connect
-      </button>
+    <div className="m-2 space-y-4">
+      <div className="space-x-10">
+        <button className="bg-blue-50 text-black" onClick={connect}>
+          Connect
+        </button>
+      </div>
+
+      {messages.length > 0 && (
+        <div className="mt-4">
+          <h3 className="text-lg font-semibold mb-2">Messages:</h3>
+          <div className="bg-gray-100 p-4 rounded-lg max-h-60 overflow-y-auto">
+            {messages.map((message, index) => (
+              <div key={index} className="mb-2 p-2 bg-white rounded shadow">
+                <pre className="whitespace-pre-wrap break-words">
+                  {JSON.stringify(JSON.parse(message), null, 2)}
+                </pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -17,7 +17,7 @@ impl<'de> Deserialize<'de> for UserId {
     }
 }
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq)]
 pub struct QueueMessage {
     pub user_id: UserId,
 }
