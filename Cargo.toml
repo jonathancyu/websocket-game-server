@@ -3,3 +3,4 @@ members = [
     "src/common",
     "src/central-server",
 ]
+resolver = "2"

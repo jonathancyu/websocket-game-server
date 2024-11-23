@@ -20,6 +20,11 @@ pub struct MatchmakingService {
     users_in_queue: HashSet<UserId>,
 }
 
+#[derive(Debug)]
+enum MatchmakingError {
+    Error,
+}
+
 impl MatchmakingService {
     pub fn new() -> Self {
         Self {
@@ -50,40 +55,52 @@ impl MatchmakingService {
             // Listen for queue join messages
             tokio::select! {
                 _ = shutdown_receiver.recv() => {
-                    break;
+                    break
                 }
                 message = receiver.recv() => {
-                    match message.unwrap() {
-                        MatchmakingRequest::JoinQueue(player) => {
-                            info!("got {:?}", player);
-                            let sender = player.sender.clone();
-                            if sender.is_closed() {
-                                warn!("Sender {:?} is closed!", player.id);
-                            }
-                            let _ = self.add_user(player);
-                            let result = sender.send(MatchmakingResponse::QueueJoined).await;
-                            if let Err(err) = result {
-                                error!("Got error when sending MatchmakingResponse: {}", err);
-                            }
-                        }
-                        MatchmakingRequest::LeaveQueue(user_id) => {
-                            if self.users_in_queue.contains(&user_id) {
-                                for (i, user) in self.queue.iter().enumerate() {
-                                    if user.id == user_id {
-                                        self.queue.remove(i);
-                                        info!("Removing user {:?} from queue", user_id);
-                                        return;
-                                    }
-                                }
-                                warn!("User {:?} was not i queue", user_id);
-                            }
-                        }
-                        MatchmakingRequest::Exit => break,
-                    };
-                },
+                    self.handle_message(message).await;
+                }
             }
         }
         info!("Exiting matchmaking service");
+    }
+
+    async fn handle_message(&mut self, message: Option<MatchmakingRequest>) {
+        let Some(message) = message else {
+            return;
+        };
+        match message {
+            MatchmakingRequest::JoinQueue(player) => {
+                info!("got {:?}", player);
+                let sender = player.sender.clone();
+                if sender.is_closed() {
+                    warn!("Sender {:?} is closed!", player.id);
+                }
+                let _ = self.add_user(player);
+                let result = sender.send(MatchmakingResponse::QueueJoined).await;
+                if let Err(err) = result {
+                    error!("Got error when sending MatchmakinResponse: {}", err);
+                }
+            }
+            MatchmakingRequest::LeaveQueue(user_id) => {
+                if self.users_in_queue.contains(&user_id) {
+                    let position = self
+                        .queue
+                        .iter()
+                        .enumerate()
+                        .find(|(_, user)| user.id == user_id);
+                    if let Some((position, user)) = position {
+                        info!("Removing user {:?} from queue", user);
+                        self.queue.remove(position);
+                    } else {
+                        warn!("User {:?} was not in queue", user_id);
+                    }
+                }
+            }
+            MatchmakingRequest::Exit => {
+                info!("Exit ?");
+            }
+        };
     }
 }
 

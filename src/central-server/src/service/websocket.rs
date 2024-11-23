@@ -90,7 +90,7 @@ impl WebSocketHandler {
                 }
             };
         }
-        info!("Exited s listener");
+        info!("Exited ws listener");
     }
 
     async fn handle_connection(
