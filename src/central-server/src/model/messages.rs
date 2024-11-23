@@ -47,6 +47,8 @@ pub struct QueuedPlayer {
 pub enum ClientRequest {
     // Add user to queue
     JoinQueue { user_id: UserId },
+    // Ensure queue is still alive
+    Ping,
     // User was disconnected from the match, and needs the server address again
     GetServer { user_id: UserId },
 }

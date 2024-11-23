@@ -119,6 +119,7 @@ impl WebSocketHandler {
                         mm_sender.send(mm_request).await.unwrap();
                         ClientResponse::JoinedQueue
                     }
+                    ClientRequest::Ping => ClientResponse::QueuePing { time_elapsed: 0u32 },
                     ClientRequest::GetServer { user_id: _ } => ClientResponse::JoinServer {
                         server_ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
                     },

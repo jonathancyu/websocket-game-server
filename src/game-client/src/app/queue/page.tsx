@@ -40,6 +40,8 @@ type JoinQueue = {
   };
 };
 
+type Ping = { Ping: null };
+
 export default function Queue() {
   const [user_id] = useState(() => crypto.randomUUID());
   const [inQueue, setInQueue] = useState<boolean>(false);
@@ -84,10 +86,24 @@ export default function Queue() {
     // Close listener
     webSocket.onclose = (event) => {
       console.log("Closed websocket " + user_id);
-      setMessages([])
+      setMessages([]);
     };
 
+    // Set up polling interval
+    const pollInterval = setInterval(() => {
+      if (webSocket.readyState == WebSocket.OPEN) {
+        const payload = JSON.stringify({ Ping: null } satisfies Ping);
+        console.log("Sent ping: " + payload);
+        webSocket.send(payload);
+      }
+    }, 5000);
+
     setSocket(webSocket);
+
+    return () => {
+      clearInterval(pollInterval);
+      webSocket.close();
+    };
   }, [user_id, inQueue]);
 
   function joinQueue() {
@@ -96,6 +112,7 @@ export default function Queue() {
 
   function leaveQueue() {
     setInQueue(false);
+    setMessages([]);
     if (socket) {
       socket.close();
     }
