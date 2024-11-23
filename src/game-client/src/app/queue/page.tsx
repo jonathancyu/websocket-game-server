@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -33,11 +34,11 @@ const useWebSocket = (url: string) => {
   return { messages, sendMessage };
 };
 
-type GetServer = {
-  GetServer: {
-    user_id: string;
-  };
-};
+// type GetServer = {
+//   GetServer: {
+//     user_id: string;
+//   };
+// };
 type JoinQueue = {
   JoinQueue: {
     user_id: string;
@@ -46,36 +47,57 @@ type JoinQueue = {
 
 export default function Queue() {
   const [user_id] = useState(() => crypto.randomUUID());
-  const [socketHandle, setSocketHandle] = useState<SocketHandle | null>(null);
+  // const [socketHandle, setSocketHandle] = useState<SocketHandle | null>(null);
+  // const { messages, sendMessage } = useWebSocket("ws://localhost:3001");
+  const [inQueue, setInQueue] = useState<boolean>(false);
+  const [queueSocket, setQueueSocket] = useState<WebSocket | null>(null);
 
-  function connect() {
-    const { messages, sendMessage } = useWebSocket("ws://localhost:3001");
-    setSocketHandle({
-      messages: messages,
-      sendMessage: sendMessage,
-    });
-  }
+  // function joinQueue() {
+  //   if (socketHandle == null) {
+  //     console.log("Socket handle null");
+  //     return;
+  //   }
+  //   const request: JoinQueue = {
+  //     JoinQueue: {
+  //       user_id: user_id,
+  //     },
+  //   };
+  //   const payload = JSON.stringify(request);
+  //   socketHandle.sendMessage(payload);
+  //   console.log("Sent " + payload);
+  useEffect(() => {
+    if (inQueue) {
+      if (queueSocket !== null) {
+        // Queue websocket is already established, do nothing
+        return;
+      }
+      // Try to join queue
 
-  function getServer() {
-    if (socketHandle == null) {
-      console.log("Socket handle null");
-      return;
+      try {
+        const socket = new WebSocket("ws://localhost:3001");
+
+        socket.onerror = (error) => {
+          console.error("WebSocket error:", error);
+          setQueueSocket(null);
+        };
+
+        socket.onclose = () => {
+          console.log("WebSocket connection closed");
+          setQueueSocket(null);
+        };
+
+        socket.onopen = () => {
+          console.log("WebSocket connection established");
+        };
+      } catch (error) {
+        console.error("Failed to create WebSocket connection:", error);
+        setInQueue(false);
+        setQueueSocket(null);
+      }
     }
-    const request: GetServer = {
-      GetServer: {
-        user_id: user_id,
-      },
-    };
-    const payload = JSON.stringify(request);
-    socketHandle.sendMessage(payload);
-    console.log("Sent " + payload);
-  }
+  }, [queueSocket, inQueue]);
 
   function joinQueue() {
-    if (socketHandle == null) {
-      console.log("Socket handle null");
-      return;
-    }
     const request: JoinQueue = {
       JoinQueue: {
         user_id: user_id,
@@ -85,25 +107,15 @@ export default function Queue() {
     socketHandle.sendMessage(payload);
     console.log("Sent " + payload);
   }
+  function connect() {
+    setInQueue(true);
+  }
 
   return (
     <div className="m-2 space-x-10">
       <button className="bg-blue-50 text-black" onClick={connect}>
         Connect
       </button>
-      <button className="bg-blue-50 text-black" onClick={joinQueue}>
-        Join queue
-      </button>
-      <button className="bg-blue-50 text-black" onClick={getServer}>
-        get server
-      </button>
-      {socketHandle && (
-        <div>
-          {socketHandle.messages.map((msg, index) => (
-            <div key={index}>{msg}</div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
