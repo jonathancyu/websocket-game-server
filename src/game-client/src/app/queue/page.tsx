@@ -44,55 +44,76 @@ export default function Queue() {
   const [user_id] = useState(() => crypto.randomUUID());
   const [inQueue, setInQueue] = useState<boolean>(false);
   const [messages, setMessages] = useState<string[]>([]);
+  const [socket, setSocket] = useState<WebSocket | null>(null);
 
   useEffect(() => {
     if (!inQueue) {
       console.log("Left queue");
+      return;
     }
-    console.log("In queue!");
+    console.log("Joined queue!");
 
     // Try to join websocket
     // BUG: Is it possible to already have a socket established?
-    const socket = new WebSocket("ws://localhost:3001");
-    if (socket == null) {
+    const webSocket = new WebSocket("ws://localhost:3001");
+    if (webSocket == null) {
       console.error("Socket is null");
       return;
     }
 
     // Send join queue message on open
-    socket.onopen = () => {
+    webSocket.onopen = () => {
       const payload = JSON.stringify({
         JoinQueue: {
           user_id: user_id,
         },
       } satisfies JoinQueue);
       console.log("Sent " + payload);
-      socket.send(payload);
+      webSocket.send(payload);
     };
-    socket.onerror = (event: Event) => {
+    webSocket.onerror = (event: Event) => {
       console.error("Failed to establish websocket: " + event);
+      // TODO: retry
     };
 
     // Add message listener
-    socket.onmessage = (event) => {
+    webSocket.onmessage = (event) => {
       setMessages((previous) => [...previous, event.data]);
     };
+
+    // Close listener
+    webSocket.onclose = (event) => {
+      console.log("Closed websocket");
+    };
+
+    setSocket(webSocket);
   }, [user_id, inQueue]);
 
-  function connect() {
-    console.log("Set queue true");
+  function joinQueue() {
     setInQueue(true);
+  }
+
+  function leaveQueue() {
+    setInQueue(false);
+    if (socket) {
+      socket.close();
+    }
   }
 
   return (
     <div className="m-2 space-y-4">
       <div className="space-x-10">
-        <button className="bg-blue-50 text-black" onClick={connect}>
+        <button className="bg-blue-50 text-black" onClick={joinQueue}>
           Connect
         </button>
+        {inQueue && (
+          <button className="bg-blue-50 text-black" onClick={leaveQueue}>
+            Exit
+          </button>
+        )}
       </div>
 
-      {messages.length > 0 && (
+      {inQueue && messages.length > 0 && (
         <div className="mt-4">
           <h3 className="text-lg font-semibold mb-2">Messages:</h3>
           <div className="bg-gray-100 p-4 rounded-lg max-h-60 overflow-y-auto">

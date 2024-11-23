@@ -74,7 +74,7 @@ async fn matchmaking_thread(
     let receiver = receiver.lock().unwrap();
     info!("Initialized matchmaking service");
     while let Ok(message) = receiver.recv() {
-        print!("got {:?}", message);
+        info!("got {:?}", message);
         let _ = service.add_user(message);
     }
     Ok(())
