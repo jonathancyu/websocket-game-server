@@ -13,14 +13,17 @@ use tokio::{
         Mutex,
     },
 };
-use tokio_tungstenite::{accept_async, tungstenite::Message};
+use tokio_tungstenite::{
+    accept_async,
+    tungstenite::{connect, Message},
+};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::{
     model::messages::{
         ClientRequest, ClientResponse, MatchmakingRequest, MatchmakingResponse, QueuedPlayer,
-        UserId,
+        SocketRequest, UserId,
     },
     utility::channel::Channel,
 };
@@ -104,6 +107,33 @@ impl WebSocketHandler {
         let stream = accept_async(stream).await.unwrap();
         let (mut ws_sender, mut ws_receiver) = stream.split();
         loop {
+            // Receive message
+            let msg = ws_receiver.next().await;
+            let msg = match msg {
+                None => {
+                    debug!("Websocket closed");
+                    // TODO: Likely should be handled on the matchmaking end
+
+                    // mm_sender
+                    //     .send(MatchmakingRequest::Disconnected(connection.user_id.clone()))
+                    //     .await
+                    //     .expect("Failed to send leave queue");
+                    break;
+                }
+                Some(msg) => msg,
+            }
+            .expect("Couldn't unwrap msg");
+
+            if !msg.is_text() {
+                warn!("Got non message of type {:?}, skipping", msg);
+                continue;
+            }
+
+            // Deserialize request
+            let body = msg.to_text().unwrap();
+            debug!(body);
+            let request: SocketRequest =
+                serde_json::from_str(body).expect("Could not deserialize request.");
             let mut state = state.lock().await;
             state
                 .user_handles
@@ -113,48 +143,25 @@ impl WebSocketHandler {
                     mm_to_ws: Channel::from(mpsc::channel(100)),
                 });
             let connection = state.user_handles.get(&address).unwrap();
-            let msg = ws_receiver.next().await;
-            let msg = match msg {
-                None => {
-                    debug!("Websocket closed");
-                    // TODO: Likely should be handled on the matchmaking end
-                    mm_sender
-                        .send(MatchmakingRequest::Disconnected(connection.user_id.clone()))
-                        .await
-                        .expect("Failed to send leave queue");
-                    break;
+
+            debug!("Got message {:?}", &msg);
+
+            let response = match request.request {
+                ClientRequest::JoinQueue => {
+                    let mm_request = MatchmakingRequest::JoinQueue(QueuedPlayer {
+                        id: connection.user_id.clone(),
+                        sender: connection.mm_to_ws.sender.clone(),
+                    });
+                    mm_sender.send(mm_request).await.unwrap();
+                    ClientResponse::JoinedQueue
                 }
-                Some(msg) => msg,
+                ClientRequest::Ping => ClientResponse::QueuePing { time_elapsed: 0u32 },
+                ClientRequest::GetServer => ClientResponse::JoinServer {
+                    server_ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
+                },
             };
-
-            let Ok(msg) = msg else {
-                error!("Error on msg: {:?}", msg);
-                break;
-            };
-            if msg.is_text() {
-                debug!("Got message {:?}", &msg);
-                // Deserialize request
-                let body = msg.to_text().unwrap();
-                let request = serde_json::from_str(body).expect("Could not deserialize request.");
-
-                let response = match request {
-                    ClientRequest::JoinQueue => {
-                        let mm_request = MatchmakingRequest::JoinQueue(QueuedPlayer {
-                            id: connection.user_id.clone(),
-                            sender: connection.mm_to_ws.sender.clone(),
-                        });
-                        mm_sender.send(mm_request).await.unwrap();
-                        ClientResponse::JoinedQueue
-                    }
-                    ClientRequest::Ping => ClientResponse::QueuePing { time_elapsed: 0u32 },
-                    ClientRequest::GetServer => ClientResponse::JoinServer {
-                        server_ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
-                    },
-                };
-                let response =
-                    serde_json::to_string(&response).expect("Could not serialize response.");
-                ws_sender.send(Message::Text(response)).await.unwrap();
-            }
+            let response = serde_json::to_string(&response).expect("Could not serialize response.");
+            ws_sender.send(Message::Text(response)).await.unwrap();
         }
     }
 }

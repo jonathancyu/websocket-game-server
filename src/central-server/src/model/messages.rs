@@ -17,6 +17,15 @@ impl<'de> Deserialize<'de> for UserId {
         Ok(UserId(uuid))
     }
 }
+impl Serialize for UserId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
 // Message types used for inter-thread communication
 #[derive(Debug, Clone)]
 pub struct MatchDetails {}
@@ -41,7 +50,20 @@ pub struct QueuedPlayer {
     pub sender: Sender<MatchmakingResponse>,
 }
 
-// API Request/response
+// Websocket messages
+#[derive(Deserialize)]
+pub struct SocketRequest {
+    pub id: Option<UserId>,
+    pub request: ClientRequest,
+}
+
+#[derive(Deserialize)]
+pub struct SocketResponse {
+    pub id: Option<UserId>, // TODO: in here?
+    pub message: ClientRequest,
+}
+
+// API messages
 
 #[derive(Deserialize)]
 pub enum ClientRequest {
@@ -55,6 +77,8 @@ pub enum ClientRequest {
 
 #[derive(Serialize)]
 pub enum ClientResponse {
+    // Connected
+    Connected { user_id: UserId },
     // Ack user joining queue
     JoinedQueue,
     // Constant ping to let user know still connected

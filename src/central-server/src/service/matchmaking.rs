@@ -58,7 +58,6 @@ impl MatchmakingService {
                     break
                 }
                 message = receiver.recv() => {
-                    info!("Handling");
                     self.handle_message(message).await;
                 }
             }

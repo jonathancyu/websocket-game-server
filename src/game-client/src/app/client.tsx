@@ -1,12 +1,63 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
+import { match } from "ts-pattern";
 import { useEffect, useState } from "react";
 
-const MatchmakingRequest = {
-  joinQueue: () => ({ JoinQueue: null }),
-  ping: () => ({ Ping: null }),
-} as const;
+// Requests
+type JoinQueue = { JoinQueue: null };
+type Ping = { Ping: null };
+type MatchmakingRequest = JoinQueue | Ping;
+type SocketRequest = {
+  userId: string | null;
+  request: MatchmakingRequest;
+};
+// Reqponses
+interface Connected {
+  kind: "Connected";
+  Connected: { userId: string };
+}
+interface JoinedQueue {
+  kind: "JoinedQueue";
+  JoinedQueue: null;
+}
+interface QueuePing {
+  kind: "QueuePing";
+  QueuePing: { timeElapsed: number };
+}
+interface JoinServer {
+  kind: "JoinServer";
+  JoinServer: { serverIp: string };
+}
+interface Error {
+  kind: "Error";
+  Error: { message: string };
+}
+
+type MatchmakingResponse =
+  | Connected
+  | JoinedQueue
+  | QueuePing
+  | JoinServer
+  | Error;
+
+type SocketResponse = {
+  userId: string | null;
+  response: MatchmakingResponse;
+};
+
+const requestFactory = {
+  joinQueue: (userId: string | null) =>
+    ({
+      userId: userId,
+      request: { JoinQueue: null },
+    }) satisfies SocketRequest,
+  ping: (userId: string) =>
+    ({
+      userId: userId,
+      request: { Ping: null },
+    }) satisfies SocketRequest,
+};
 
 type ClientProps = {
   id: string;
@@ -23,6 +74,7 @@ export default function Client({ id }: ClientProps) {
   const [inQueue, setInQueue] = useState<boolean>(true);
   const [messages, setMessages] = useState<string[]>([]);
   const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
     ConnectionStatus.Off,
   );
@@ -37,7 +89,7 @@ export default function Client({ id }: ClientProps) {
     setConnectionStatus(ConnectionStatus.Connecting);
 
     newSocket.onopen = () => {
-      const payload = JSON.stringify(MatchmakingRequest.joinQueue());
+      const payload = JSON.stringify(requestFactory.joinQueue(userId));
       console.log("Sent " + payload);
       newSocket.send(payload);
       setConnectionStatus(ConnectionStatus.Connected);
@@ -49,6 +101,15 @@ export default function Client({ id }: ClientProps) {
     };
 
     newSocket.onmessage = (event) => {
+      const message = JSON.parse(event.data) as SocketResponse;
+      match(message.response).with({ kind: "Connected" }, ({ Connected }) => {
+        if (!Connected.userId) {
+          console.log("Got Connected without userid");
+        }
+        if (!userId) {
+          setUserId(Connected.userId);
+        }
+      });
       setMessages((previous) => [...previous, event.data]);
     };
 

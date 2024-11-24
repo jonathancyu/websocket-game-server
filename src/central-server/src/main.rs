@@ -2,7 +2,6 @@ use server::service::{matchmaking::MatchmakingService, websocket::WebSocketHandl
 use server::utility::channel::Channel;
 use tokio::sync::broadcast;
 use tokio::{sync::mpsc, task::JoinHandle};
-use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::main]
 async fn main() {
@@ -10,8 +9,11 @@ async fn main() {
         .with_line_number(true)
         .with_file(true)
         .init();
+
+    // Channels for communication between matchmaker and websockets
     let to_mm_channel = Channel::from(mpsc::channel(100));
     let to_ws_channel = Channel::from(mpsc::channel(100));
+    // Shutdown hook
     let (shutdown_sender, shutdown_receiver) = broadcast::channel::<()>(100);
     let mut mm_shutdown_receiver = shutdown_receiver.resubscribe();
     let mut ws_shutdown_receiver = shutdown_receiver.resubscribe();
