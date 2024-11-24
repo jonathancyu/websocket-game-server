@@ -34,13 +34,11 @@ const useWebSocket = (url: string) => {
 //     user_id: string;
 //   };
 // };
-type JoinQueue = {
-  JoinQueue: {
-    user_id: string;
-  };
-};
 
-type Ping = { Ping: null };
+const MatchmakingRequest  = {
+  joinQueue: () => ({ JoinQueue: null }),
+  ping: () => ({ Ping: null })
+} as const;
 
 export default function Queue() {
   const [user_id] = useState(() => crypto.randomUUID());
@@ -65,11 +63,7 @@ export default function Queue() {
 
     // Send join queue message on open
     webSocket.onopen = () => {
-      const payload = JSON.stringify({
-        JoinQueue: {
-          user_id: user_id,
-        },
-      } satisfies JoinQueue);
+      const payload = JSON.stringify(MatchmakingRequest.joinQueue());
       console.log("Sent " + payload);
       webSocket.send(payload);
     };
@@ -87,12 +81,13 @@ export default function Queue() {
     webSocket.onclose = (event) => {
       console.log("Closed websocket " + user_id);
       setMessages([]);
+      setInQueue(false);
     };
 
     // Set up polling interval
     const pollInterval = setInterval(() => {
       if (webSocket.readyState == WebSocket.OPEN) {
-        const payload = JSON.stringify({ Ping: null } satisfies Ping);
+        const payload = JSON.stringify(MatchmakingRequest.ping());
         console.log("Sent ping: " + payload);
         webSocket.send(payload);
       }

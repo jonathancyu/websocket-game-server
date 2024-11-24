@@ -26,7 +26,7 @@ use crate::{
 };
 
 struct Connection {
-    id: UserId,
+    user_id: UserId,
     mm_to_ws: Channel<MatchmakingResponse>,
 }
 
@@ -109,17 +109,17 @@ impl WebSocketHandler {
                 .user_handles
                 .entry(address)
                 .or_insert_with(|| Connection {
-                    id: UserId(Uuid::new_v4()),
+                    user_id: UserId(Uuid::new_v4()),
                     mm_to_ws: Channel::from(mpsc::channel(100)),
                 });
             let connection = state.user_handles.get(&address).unwrap();
             let msg = ws_receiver.next().await;
             let msg = match msg {
                 None => {
-                    error!("Websocket closed");
+                    debug!("Websocket closed");
                     // TODO: Likely should be handled on the matchmaking end
                     mm_sender
-                        .send(MatchmakingRequest::LeaveQueue(connection.id.clone()))
+                        .send(MatchmakingRequest::Disconnected(connection.user_id.clone()))
                         .await
                         .expect("Failed to send leave queue");
                     break;
@@ -138,16 +138,16 @@ impl WebSocketHandler {
                 let request = serde_json::from_str(body).expect("Could not deserialize request.");
 
                 let response = match request {
-                    ClientRequest::JoinQueue { user_id } => {
+                    ClientRequest::JoinQueue => {
                         let mm_request = MatchmakingRequest::JoinQueue(QueuedPlayer {
-                            id: user_id.clone(),
+                            id: connection.user_id.clone(),
                             sender: connection.mm_to_ws.sender.clone(),
                         });
                         mm_sender.send(mm_request).await.unwrap();
                         ClientResponse::JoinedQueue
                     }
                     ClientRequest::Ping => ClientResponse::QueuePing { time_elapsed: 0u32 },
-                    ClientRequest::GetServer { user_id: _ } => ClientResponse::JoinServer {
+                    ClientRequest::GetServer => ClientResponse::JoinServer {
                         server_ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
                     },
                 };

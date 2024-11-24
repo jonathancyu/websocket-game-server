@@ -1,4 +1,3 @@
-use core::error;
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
@@ -37,6 +36,7 @@ impl MatchmakingService {
         if !self.users_in_queue.contains(&user_id) {
             info!("Adding user {:?} to queue", user_id);
             self.queue.push_back(player);
+            self.users_in_queue.insert(user_id);
             Ok(())
         } else {
             Err("User already in queue")
@@ -52,12 +52,13 @@ impl MatchmakingService {
         let mut receiver = ws_receiver.lock().await;
         info!("Initialized matchmaking service");
         loop {
-            // Listen for queue join messages
+            // Listen for queue messages / shutdown signal
             tokio::select! {
                 _ = shutdown_receiver.recv() => {
                     break
                 }
                 message = receiver.recv() => {
+                    info!("Handling");
                     self.handle_message(message).await;
                 }
             }
@@ -67,11 +68,11 @@ impl MatchmakingService {
 
     async fn handle_message(&mut self, message: Option<MatchmakingRequest>) {
         let Some(message) = message else {
+            info!("Got empty message");
             return;
         };
         match message {
             MatchmakingRequest::JoinQueue(player) => {
-                info!("got {:?}", player);
                 let sender = player.sender.clone();
                 if sender.is_closed() {
                     warn!("Sender {:?} is closed!", player.id);
@@ -79,26 +80,29 @@ impl MatchmakingService {
                 let _ = self.add_user(player);
                 let result = sender.send(MatchmakingResponse::QueueJoined).await;
                 if let Err(err) = result {
-                    error!("Got error when sending MatchmakinResponse: {}", err);
+                    error!("Got error when sending MatchmakingResponse: {}", err);
                 }
             }
             MatchmakingRequest::LeaveQueue(user_id) => {
-                if self.users_in_queue.contains(&user_id) {
-                    let position = self
-                        .queue
-                        .iter()
-                        .enumerate()
-                        .find(|(_, user)| user.id == user_id);
-                    if let Some((position, user)) = position {
-                        info!("Removing user {:?} from queue", user);
-                        self.queue.remove(position);
-                    } else {
-                        warn!("User {:?} was not in queue", user_id);
+                match self.users_in_queue.get(&user_id) {
+                    Some(_) => {
+                        let position = self.queue.iter().enumerate().find(|(_, user)| user.id == user_id);
+                        if let Some((position, user)) = position {
+                            info!("Removing user {:?} from queue", user.id);
+                            self.queue.remove(position);
+                        } else {
+                            warn!(
+                                "User {:?} was in users_in_queue but not in actual queue",
+                                user_id
+                            );
+                        }
                     }
+                    None => warn!("User {:?} not in queue", user_id),
                 }
+                if self.users_in_queue.contains(&user_id) {}
             }
-            MatchmakingRequest::Exit => {
-                info!("Exit ?");
+            MatchmakingRequest::Disconnected(user_id) => {
+                warn!("User {:?} disconnected. What to do..?", user_id);
             }
         };
     }

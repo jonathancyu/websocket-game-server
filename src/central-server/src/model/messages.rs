@@ -25,7 +25,7 @@ pub struct MatchDetails {}
 pub enum MatchmakingRequest {
     JoinQueue(QueuedPlayer),
     LeaveQueue(UserId),
-    Exit,
+    Disconnected(UserId),
 }
 
 #[derive(Debug, Clone)]
@@ -46,11 +46,11 @@ pub struct QueuedPlayer {
 #[derive(Deserialize)]
 pub enum ClientRequest {
     // Add user to queue
-    JoinQueue { user_id: UserId },
+    JoinQueue,
     // Ensure queue is still alive
     Ping,
     // User was disconnected from the match, and needs the server address again
-    GetServer { user_id: UserId },
+    GetServer,
 }
 
 #[derive(Serialize)]

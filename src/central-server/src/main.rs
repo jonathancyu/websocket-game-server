@@ -2,11 +2,14 @@ use server::service::{matchmaking::MatchmakingService, websocket::WebSocketHandl
 use server::utility::channel::Channel;
 use tokio::sync::broadcast;
 use tokio::{sync::mpsc, task::JoinHandle};
+use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::main]
 async fn main() {
-    let subscriber = tracing_subscriber::FmtSubscriber::new();
-    let _ = tracing::subscriber::set_global_default(subscriber);
+    tracing_subscriber::fmt()
+        .with_line_number(true)
+        .with_file(true)
+        .init();
     let to_mm_channel = Channel::from(mpsc::channel(100));
     let to_ws_channel = Channel::from(mpsc::channel(100));
     let (shutdown_sender, shutdown_receiver) = broadcast::channel::<()>(100);
