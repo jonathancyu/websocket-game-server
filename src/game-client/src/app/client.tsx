@@ -27,73 +27,49 @@ export default function Client({ id }: ClientProps) {
     ConnectionStatus.Off,
   );
 
-  useEffect(() => {
-    if (!inQueue) {
-      console.log("Left queue");
+  const connectWebSocket = () => {
+    if (socket !== null) {
+      console.log("Socket is already established");
       return;
     }
-    console.log("Joined queue!");
 
-    // Try to join websocket
-    const socket = new WebSocket("ws://localhost:3001");
+    const newSocket = new WebSocket("ws://localhost:3001");
     setConnectionStatus(ConnectionStatus.Connecting);
-    // BUG: Is it possible to already have a socket established?
-    if (socket == null) {
-      console.error("Socket is null");
-      return;
-    }
 
-    // Send join queue message on open
-    socket.onopen = () => {
+    newSocket.onopen = () => {
       const payload = JSON.stringify(MatchmakingRequest.joinQueue());
       console.log("Sent " + payload);
-      socket.send(payload);
+      newSocket.send(payload);
       setConnectionStatus(ConnectionStatus.Connected);
     };
-    socket.onerror = (event: Event) => {
+
+    newSocket.onerror = (event: Event) => {
       console.log("Error: ", event);
       setConnectionStatus(ConnectionStatus.Failed);
     };
 
-    // Add message listener
-    socket.onmessage = (event) => {
+    newSocket.onmessage = (event) => {
       setMessages((previous) => [...previous, event.data]);
     };
 
-    // Close listener
-    socket.onclose = (event) => {
+    newSocket.onclose = (event) => {
       console.log(connectionStatus);
-      if (connectionStatus != ConnectionStatus.Failed) {
-        console.log("Closed websocket " + id);
-        setMessages([]);
-        setInQueue(false);
-      }
+      console.log("Closed websocket " + id);
+      setMessages([]);
+      setSocket(null);
+      setConnectionStatus(ConnectionStatus.Off);
     };
 
-    // Set up polling interval
-    const pollInterval = setInterval(() => {
-      if (socket.readyState == WebSocket.OPEN) {
-        const payload = JSON.stringify(MatchmakingRequest.ping());
-        console.log("Sent ping: " + payload);
-        socket.send(payload);
-      }
-    }, 5000);
-
-    setSocket(socket);
-
-    return () => {
-      clearInterval(pollInterval);
-      socket.close();
-    };
-  }, [socket, id, inQueue]);
+    setSocket(newSocket);
+  };
 
   function joinQueue() {
     setInQueue(true);
+    connectWebSocket();
   }
 
   function leaveQueue() {
     setInQueue(false);
-    setMessages([]);
     if (socket) {
       socket.close();
     }
@@ -101,16 +77,17 @@ export default function Client({ id }: ClientProps) {
 
   return (
     <div className="m-2 space-y-4 text-black">
+      {connectionStatus}
       <div className="space-x-4">
-        {connectionStatus == ConnectionStatus.Off ||
-          (connectionStatus == ConnectionStatus.Failed && (
-            <button
-              className="px-6 py-2 rounded-md bg-blue-50 text-black border-2 border-blue-200 hover:bg-blue-100 transition-colors duration-200 font-medium shadow-sm"
-              onClick={joinQueue}
-            >
-              Join Queue
-            </button>
-          ))}
+        {(connectionStatus == ConnectionStatus.Off ||
+          connectionStatus == ConnectionStatus.Failed) && (
+          <button
+            className="px-6 py-2 rounded-md bg-blue-50 text-black border-2 border-blue-200 hover:bg-blue-100 transition-colors duration-200 font-medium shadow-sm"
+            onClick={joinQueue}
+          >
+            Join Queue
+          </button>
+        )}
         {connectionStatus == ConnectionStatus.Connecting && (
           <span className="inline-flex items-center text-yellow-600">
             <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
@@ -151,14 +128,12 @@ export default function Client({ id }: ClientProps) {
           </span>
         )}
         {connectionStatus == ConnectionStatus.Connected && (
-          <>
-            <button
-              className="px-6 py-2 rounded-md bg-red-50 text-red-700 border-2 border-red-200 hover:bg-red-100 transition-colors duration-200 font-medium shadow-sm"
-              onClick={leaveQueue}
-            >
-              Exit
-            </button>
-          </>
+          <button
+            className="px-6 py-2 rounded-md bg-red-50 text-red-700 border-2 border-red-200 hover:bg-red-100 transition-colors duration-200 font-medium shadow-sm"
+            onClick={leaveQueue}
+          >
+            Exit
+          </button>
         )}
       </div>
 
