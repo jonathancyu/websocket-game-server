@@ -35,12 +35,12 @@ const useWebSocket = (url: string) => {
 //   };
 // };
 
-const MatchmakingRequest  = {
+const MatchmakingRequest = {
   joinQueue: () => ({ JoinQueue: null }),
-  ping: () => ({ Ping: null })
+  ping: () => ({ Ping: null }),
 } as const;
 
-export default function Queue() {
+export default function Client() {
   const [user_id] = useState(() => crypto.randomUUID());
   const [inQueue, setInQueue] = useState<boolean>(false);
   const [messages, setMessages] = useState<string[]>([]);
@@ -115,12 +115,18 @@ export default function Queue() {
 
   return (
     <div className="m-2 space-y-4">
-      <div className="space-x-10">
-        <button className="bg-blue-50 text-black" onClick={joinQueue}>
-          Connect
+      <div className="space-x-4">
+        <button
+          className="px-6 py-2 rounded-md bg-blue-50 text-black border-2 border-blue-200 hover:bg-blue-100 transition-colors duration-200 font-medium shadow-sm"
+          onClick={joinQueue}
+        >
+          Join Queue
         </button>
         {inQueue && (
-          <button className="bg-blue-50 text-black" onClick={leaveQueue}>
+          <button
+            className="px-6 py-2 rounded-md bg-red-50 text-red-700 border-2 border-red-200 hover:bg-red-100 transition-colors duration-200 font-medium shadow-sm"
+            onClick={leaveQueue}
+          >
             Exit
           </button>
         )}
