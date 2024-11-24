@@ -1,15 +1,19 @@
 "use client";
 import { Component } from "react";
-import Client from "./queue/page";
+import Client from "./client";
 
+type ClientListProps = unknown;
 interface ClientListState {
   count: number;
 }
 
-export class ClientList extends Component<null, ClientListState> {
+export class ClientList extends Component<ClientListProps, ClientListState> {
   state = {
-    count: 0,
+    count: 9,
   };
+  constructor(props: ClientListProps) {
+    super(props);
+  }
 
   incrementCount = () => {
     this.setState((prevState) => ({
