@@ -1,39 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
-const useWebSocket = (url: string) => {
-  const [messages, setMessages] = useState<string[]>([]);
-  const [ws, setWs] = useState<WebSocket | null>(null);
-
-  useEffect(() => {
-    const socket = new WebSocket(url);
-    setWs(socket);
-
-    socket.onmessage = (event) => {
-      setMessages((previous) => [...previous, event.data]);
-    };
-
-    return () => {
-      socket.close();
-    };
-  }, [url]);
-
-  const sendMessage = (message: string) => {
-    if (ws) {
-      ws.send(message);
-    }
-  };
-
-  return { messages, sendMessage };
-};
-
-// type GetServer = {
-//   GetServer: {
-//     user_id: string;
-//   };
-// };
 
 const MatchmakingRequest = {
   joinQueue: () => ({ JoinQueue: null }),
