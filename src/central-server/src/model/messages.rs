@@ -26,11 +26,14 @@ impl Serialize for UserId {
     }
 }
 
-// Message types used for inter-thread communication
 #[derive(Debug, Clone)]
-pub struct MatchDetails {
-    pub server: String,
+pub struct Game {
+    pub id: String,
+    pub player1: Player,
+    pub player2: Player,
 }
+
+// Message types used for inter-thread communication
 
 #[derive(Debug, Clone)]
 pub enum MatchmakingRequest {
@@ -42,7 +45,7 @@ pub enum MatchmakingRequest {
 #[derive(Debug, Clone)]
 pub enum MatchmakingResponse {
     QueueJoined,
-    MatchFound(MatchDetails),
+    MatchFound(Game),
 }
 
 // Message types for the matchmaking thread

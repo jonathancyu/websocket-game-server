@@ -14,14 +14,6 @@ use crate::model::messages::{
     MatchDetails, MatchmakingRequest, MatchmakingResponse, Player, UserId,
 };
 
-// Structure to represent a player in queue
-#[derive(Debug)]
-struct Game {
-    pub id: String,
-    pub player1: Player,
-    pub player2: Player,
-}
-
 pub struct MatchmakingService {
     queue: VecDeque<Player>,
     users_in_queue: HashSet<UserId>,
@@ -30,13 +22,13 @@ pub struct MatchmakingService {
 
 impl MatchmakingService {
     async fn read_queue(&mut self) {
-        info!("Reading queue");
         // BUG: need to lock queue, couldn't we be inserting into it?
         let mut unmatched_players: VecDeque<Player> = VecDeque::new();
         let mut matches: Vec<(Player, Player)> = vec![];
         while let Some(player) = self.queue.pop_front() {
+            info!("Reading queue");
             if let Some(enemy) = unmatched_players.pop_front() {
-                info!("Matched {:?} and {:?}", player, enemy);
+                info!("Matched {:?} and {:?}", player.id, enemy.id);
                 matches.push((player, enemy));
                 continue;
             }
@@ -45,11 +37,15 @@ impl MatchmakingService {
         for (player1, player2) in matches.iter() {
             self.users_in_queue.remove(&player1.id);
             self.users_in_queue.remove(&player2.id);
+
+            // Create game
             let game = Game {
                 id: format!("Game: {:?} created", self.games.len()),
                 player1: player1.clone(),
                 player2: player2.clone(),
             };
+
+            // Notify players
             let _ = player1
                 .sender
                 .send(MatchmakingResponse::MatchFound(MatchDetails {
@@ -62,6 +58,8 @@ impl MatchmakingService {
                     server: game.id.clone(),
                 }))
                 .await;
+
+            // Add game
             self.games.push(game);
         }
         self.queue = unmatched_players;
@@ -93,7 +91,7 @@ impl MatchmakingService {
         ws_receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
     ) {
         let mut receiver = ws_receiver.lock().await;
-        let mut matchmaking_interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
 
         info!("Initialized matchmaking service");
         loop {
@@ -105,7 +103,7 @@ impl MatchmakingService {
                 message = receiver.recv() => {
                     self.handle_message(message).await;
                 }
-                _ = matchmaking_interval.tick() => {
+                _ = interval.tick() => {
                     self.read_queue().await;
                 }
             }
