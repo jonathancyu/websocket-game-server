@@ -22,7 +22,7 @@ use uuid::Uuid;
 
 use crate::{
     model::messages::{
-        ClientRequest, ClientResponse, MatchmakingRequest, MatchmakingResponse, QueuedPlayer,
+        ClientRequest, ClientResponse, MatchmakingRequest, MatchmakingResponse, Player,
         SocketRequest, UserId,
     },
     utility::channel::Channel,
@@ -148,7 +148,7 @@ impl WebSocketHandler {
 
             let response = match request.request {
                 ClientRequest::JoinQueue => {
-                    let mm_request = MatchmakingRequest::JoinQueue(QueuedPlayer {
+                    let mm_request = MatchmakingRequest::JoinQueue(Player {
                         id: connection.user_id.clone(),
                         sender: connection.mm_to_ws.sender.clone(),
                     });
