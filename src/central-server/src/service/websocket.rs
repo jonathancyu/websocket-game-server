@@ -17,7 +17,7 @@ use tokio::{
 };
 use tokio_tungstenite::{
     accept_async,
-    tungstenite::{connect, Message},
+    tungstenite::{self, Message},
     WebSocketStream,
 };
 use tracing::{debug, error, info, warn};
@@ -26,7 +26,7 @@ use uuid::Uuid;
 use crate::{
     model::messages::{
         ClientRequest, ClientResponse, MatchmakingRequest, MatchmakingResponse, Player,
-        SocketRequest, UserId,
+        SocketRequest, SocketResponse, UserId,
     },
     utility::channel::Channel,
 };
@@ -122,63 +122,91 @@ impl WebSocketHandler {
         info!("New ws connection: {}", address);
         // TODO: implement with protobuf (prost)
         let stream = accept_async(stream).await.unwrap();
-        let (mut ws_sender, mut ws_receiver) = stream.split();
+        let (mut ws_sender, mut ws_receiver): (
+            SplitSink<WebSocketStream<TcpStream>, Message>,
+            futures_util::stream::SplitStream<WebSocketStream<TcpStream>>,
+        ) = stream.split();
         let interval = interval(Duration::from_secs(5));
         loop {
-            let msg = ws_receiver.next().await;
-            let msg = match msg {
-                None => {
-                    debug!("Websocket closed");
-                    // TODO: Likely should be handled on the matchmaking end
+            let msg: Option<Result<Message, tokio_tungstenite::tungstenite::Error>> =
+                ws_receiver.next().await;
+            WebSocketHandler::handle_socket_message(
+                msg,
+                &mut ws_sender,
+                state.clone(),
+                address,
+                mm_sender.clone(),
+            )
+            .await;
+        }
+    }
 
-                    // mm_sender
-                    //     .send(MatchmakingRequest::Disconnected(connection.user_id.clone()))
-                    //     .await
-                    //     .expect("Failed to send leave queue");
-                    break;
-                }
-                Some(msg) => msg,
+    async fn handle_socket_message(
+        message: Option<Result<Message, tungstenite::Error>>,
+        ws_sender: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
+        state: Arc<Mutex<WebSocketState>>,
+        address: SocketAddr,
+        mm_sender: Sender<MatchmakingRequest>,
+    ) -> Result<(), &'static str> {
+        let msg = match message {
+            None => {
+                debug!("Websocket closed");
+                // TODO: Likely should be handled on the matchmaking end
+
+                // mm_sender
+                //     .send(MatchmakingRequest::Disconnected(connection.user_id.clone()))
+                //     .await
+                //     .expect("Failed to send leave queue");
+                return Err("Websocket closed");
             }
-            .expect("Couldn't unwrap msg");
+            Some(msg) => msg,
+        }
+        .expect("Couldn't unwrap msg");
 
-            if !msg.is_text() {
-                warn!("Got non message of type {:?}, skipping", msg);
-                continue;
-            }
+        if !msg.is_text() {
+            return Err("Got non-text message :(");
+        }
 
-            // Deserialize request
-            let body = msg.to_text().unwrap();
-            debug!(body);
-            let request: SocketRequest =
-                serde_json::from_str(body).expect("Could not deserialize request.");
-            let mut state = state.lock().await;
-            state
-                .user_handles
-                .entry(address)
-                .or_insert_with(|| Connection {
-                    user_id: UserId(Uuid::new_v4()),
-                    mm_to_ws: Channel::from(mpsc::channel(100)),
+        // Deserialize request
+        let body = msg.to_text().unwrap();
+        debug!(body);
+        let request: SocketRequest =
+            serde_json::from_str(body).expect("Could not deserialize request.");
+        let mut state = state.lock().await;
+        state
+            .user_handles
+            .entry(address)
+            .or_insert_with(|| Connection {
+                user_id: UserId(Uuid::new_v4()),
+                mm_to_ws: Channel::from(mpsc::channel(100)),
+            });
+        let connection = state.user_handles.get(&address).unwrap();
+
+        debug!("Got message {:?}", &msg);
+
+        let response = WebSocketHandler::handle_client_request(connection, request.request).await;
+        let response = serde_json::to_string(&response).expect("Could not serialize response.");
+        ws_sender.send(Message::Text(response)).await.unwrap();
+        Ok(())
+    }
+
+    async fn handle_client_request(
+        connection: &Connection,
+        request: ClientRequest,
+    ) -> ClientResponse {
+        match request {
+            ClientRequest::JoinQueue => {
+                let mm_request = MatchmakingRequest::JoinQueue(Player {
+                    id: connection.user_id.clone(),
+                    sender: connection.mm_to_ws.sender.clone(),
                 });
-            let connection = state.user_handles.get(&address).unwrap();
-
-            debug!("Got message {:?}", &msg);
-
-            let response = match request.request {
-                ClientRequest::JoinQueue => {
-                    let mm_request = MatchmakingRequest::JoinQueue(Player {
-                        id: connection.user_id.clone(),
-                        sender: connection.mm_to_ws.sender.clone(),
-                    });
-                    mm_sender.send(mm_request).await.unwrap();
-                    ClientResponse::JoinedQueue
-                }
-                ClientRequest::Ping => ClientResponse::QueuePing { time_elapsed: 0u32 },
-                ClientRequest::GetServer => ClientResponse::JoinServer {
-                    server_ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
-                },
-            };
-            let response = serde_json::to_string(&response).expect("Could not serialize response.");
-            ws_sender.send(Message::Text(response)).await.unwrap();
+                // mm_sender.send(mm_request).await.unwrap();
+                ClientResponse::JoinedQueue
+            }
+            ClientRequest::Ping => ClientResponse::QueuePing { time_elapsed: 0u32 },
+            ClientRequest::GetServer => ClientResponse::JoinServer {
+                server_ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
+            },
         }
     }
 }
