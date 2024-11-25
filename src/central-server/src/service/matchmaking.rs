@@ -81,7 +81,6 @@ impl MatchmakingService {
     pub async fn listen(
         &mut self,
         shutdown_receiver: &mut broadcast::Receiver<()>,
-        ws_sender: Sender<MatchmakingResponse>,
         ws_receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
     ) {
         let mut receiver = ws_receiver.lock().await;
@@ -122,28 +121,25 @@ impl MatchmakingService {
                     error!("Got error when sending MatchmakingResponse: {}", err);
                 }
             }
-            MatchmakingRequest::LeaveQueue(user_id) => {
-                match self.users_in_queue.get(&user_id) {
-                    Some(_) => {
-                        let position = self
-                            .queue
-                            .iter()
-                            .enumerate()
-                            .find(|(_, user)| user.id == user_id);
-                        if let Some((position, user)) = position {
-                            info!("Removing user {:?} from queue", user.id);
-                            self.queue.remove(position);
-                        } else {
-                            warn!(
-                                "User {:?} was in users_in_queue but not in actual queue",
-                                user_id
-                            );
-                        }
+            MatchmakingRequest::LeaveQueue(user_id) => match self.users_in_queue.get(&user_id) {
+                Some(_) => {
+                    let position = self
+                        .queue
+                        .iter()
+                        .enumerate()
+                        .find(|(_, user)| user.id == user_id);
+                    if let Some((position, user)) = position {
+                        info!("Removing user {:?} from queue", user.id);
+                        self.queue.remove(position);
+                    } else {
+                        warn!(
+                            "User {:?} was in users_in_queue but not in actual queue",
+                            user_id
+                        );
                     }
-                    None => warn!("User {:?} not in queue", user_id),
                 }
-                if self.users_in_queue.contains(&user_id) {}
-            }
+                None => warn!("User {:?} not in queue", user_id),
+            },
             MatchmakingRequest::Disconnected(user_id) => {
                 warn!("User {:?} disconnected. What to do..?", user_id);
             }

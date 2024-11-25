@@ -5,20 +5,19 @@ use std::{
     time::Duration,
 };
 
-use futures_util::{stream::SplitSink, SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::{
         broadcast,
-        mpsc::{self, Receiver, Sender},
+        mpsc::{self, Sender},
         Mutex,
     },
-    time::interval,
+    time,
 };
 use tokio_tungstenite::{
     accept_async,
     tungstenite::{self, Message},
-    WebSocketStream,
 };
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -31,13 +30,14 @@ use crate::{
     utility::channel::Channel,
 };
 
+#[derive(Clone)]
 struct Connection {
     user_id: UserId,
     mm_to_ws: Channel<MatchmakingResponse>,
 }
 
 struct WebSocketState {
-    user_handles: HashMap<SocketAddr, Connection>,
+    user_handles: HashMap<UserId, Connection>,
 }
 impl WebSocketState {}
 
@@ -64,7 +64,6 @@ impl WebSocketHandler {
         &mut self,
         shutdown_receiver: &mut broadcast::Receiver<()>,
         mm_sender: Sender<MatchmakingRequest>,
-        mm_receiver: Arc<Mutex<Receiver<MatchmakingResponse>>>,
     ) {
         // TODO: Implement polling mm listener
         let address = self.format_address();
@@ -99,20 +98,6 @@ impl WebSocketHandler {
         info!("Exited ws listener");
     }
 
-    async fn read_matchmaking_messages(
-        &self,
-        mm_receiver: Arc<Mutex<Receiver<MatchmakingResponse>>>,
-    ) {
-        // ISSUE: We already have the mm_to_ws channel in each connection. so we should use that
-        let mut listener = mm_receiver.lock().await;
-        while let Some(response) = listener.recv().await {
-            match response {
-                MatchmakingResponse::QueueJoined => todo!(),
-                MatchmakingResponse::MatchFound(matchDetails) => todo!(),
-            }
-        }
-    }
-
     async fn handle_connection(
         state: Arc<Mutex<WebSocketState>>,
         stream: TcpStream,
@@ -122,32 +107,82 @@ impl WebSocketHandler {
         info!("New ws connection: {}", address);
         // TODO: implement with protobuf (prost)
         let stream = accept_async(stream).await.unwrap();
-        let (mut ws_sender, mut ws_receiver): (
-            SplitSink<WebSocketStream<TcpStream>, Message>,
-            futures_util::stream::SplitStream<WebSocketStream<TcpStream>>,
-        ) = stream.split();
-        let interval = interval(Duration::from_secs(5));
+        let (mut ws_sender, mut ws_receiver) = stream.split();
+        let mut interval = time::interval(Duration::from_secs(5));
+        let mut connection_id: Option<UserId> = None;
         loop {
-            let msg: Option<Result<Message, tokio_tungstenite::tungstenite::Error>> =
-                ws_receiver.next().await;
-            WebSocketHandler::handle_socket_message(
-                msg,
-                &mut ws_sender,
-                state.clone(),
-                address,
-                mm_sender.clone(),
-            )
-            .await;
+            tokio::select! {
+                _ = interval.tick() => {
+                    let message = WebSocketHandler::poll_connection(state.clone(), connection_id.clone()).await;
+                    if let Some(response) = message {
+                        let response = serde_json::to_string(&response).expect("Could not serialize response.");
+                        ws_sender.send(Message::Text(response)).await.unwrap();
+                    }
+                }
+                msg = ws_receiver.next() => {
+                    let result = WebSocketHandler::handle_socket_message(
+                        msg,
+                        state.clone(),
+                        mm_sender.clone()
+                    ).await;
+
+                    match result  {
+                        Ok(response) => {
+                            if let Some(connection_id) = connection_id.clone() {
+                                if connection_id != response.user_id {
+                                    warn!("Somehow connection ID != response.user_id");
+                                }
+                            } else {
+                                connection_id = Some(response.clone().user_id);
+                            }
+
+                            let response = serde_json::to_string(&response).expect("Could not serialize response.");
+                            ws_sender.send(Message::Text(response)).await.unwrap();
+                        },
+                        Err(_) => break,
+                    };
+                }
+            }
         }
+    }
+
+    async fn poll_connection(
+        state: Arc<Mutex<WebSocketState>>,
+        connection_id: Option<UserId>,
+    ) -> Option<SocketResponse> {
+        let Some(connection_id) = connection_id else {
+            warn!("Cannot poll connection w/o connection_id");
+            return None;
+        };
+        // Get connection handle
+        let connection = state
+            .lock()
+            .await
+            .user_handles
+            .get(&connection_id)
+            .expect("User has connection_id but is not in user_handles")
+            .clone();
+
+        // See if MM sent any messages
+        let message = connection.mm_to_ws.receiver.lock().await.recv().await?;
+
+        // If message was sent, forward to user
+        Some(SocketResponse {
+            user_id: connection_id,
+            message: match message {
+                MatchmakingResponse::QueueJoined => ClientResponse::JoinedQueue,
+                MatchmakingResponse::MatchFound(game) => {
+                    ClientResponse::MatchFound { game_id: game.id }
+                }
+            },
+        })
     }
 
     async fn handle_socket_message(
         message: Option<Result<Message, tungstenite::Error>>,
-        ws_sender: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
         state: Arc<Mutex<WebSocketState>>,
-        address: SocketAddr,
         mm_sender: Sender<MatchmakingRequest>,
-    ) -> Result<(), &'static str> {
+    ) -> Result<SocketResponse, &'static str> {
         let msg = match message {
             None => {
                 debug!("Websocket closed");
@@ -172,27 +207,40 @@ impl WebSocketHandler {
         debug!(body);
         let request: SocketRequest =
             serde_json::from_str(body).expect("Could not deserialize request.");
-        let mut state = state.lock().await;
-        state
+        // If client provided user_id, use it. Otherwise give them a new one.
+        let user_id = match request.user_id {
+            Some(user_id) => user_id,
+            None => UserId(Uuid::new_v4()),
+        };
+        // Lookup user's Connection by user_id
+        let connection = state
+            .lock()
+            .await
             .user_handles
-            .entry(address)
+            .entry(user_id.clone())
             .or_insert_with(|| Connection {
-                user_id: UserId(Uuid::new_v4()),
+                user_id: user_id.clone(),
                 mm_to_ws: Channel::from(mpsc::channel(100)),
-            });
-        let connection = state.user_handles.get(&address).unwrap();
+            })
+            .clone();
 
         debug!("Got message {:?}", &msg);
 
-        let response = WebSocketHandler::handle_client_request(connection, request.request).await;
-        let response = serde_json::to_string(&response).expect("Could not serialize response.");
-        ws_sender.send(Message::Text(response)).await.unwrap();
-        Ok(())
+        Ok(SocketResponse {
+            user_id,
+            message: WebSocketHandler::handle_client_request(
+                &connection,
+                request.request,
+                mm_sender,
+            )
+            .await,
+        })
     }
 
     async fn handle_client_request(
         connection: &Connection,
         request: ClientRequest,
+        mm_sender: Sender<MatchmakingRequest>,
     ) -> ClientResponse {
         match request {
             ClientRequest::JoinQueue => {
@@ -200,7 +248,7 @@ impl WebSocketHandler {
                     id: connection.user_id.clone(),
                     sender: connection.mm_to_ws.sender.clone(),
                 });
-                // mm_sender.send(mm_request).await.unwrap();
+                mm_sender.send(mm_request).await.unwrap();
                 ClientResponse::JoinedQueue
             }
             ClientRequest::Ping => ClientResponse::QueuePing { time_elapsed: 0u32 },

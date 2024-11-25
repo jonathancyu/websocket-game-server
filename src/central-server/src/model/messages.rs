@@ -58,14 +58,14 @@ pub struct Player {
 // Websocket messages
 #[derive(Deserialize)]
 pub struct SocketRequest {
-    pub id: Option<UserId>,
+    pub user_id: Option<UserId>,
     pub request: ClientRequest,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Clone)]
 pub struct SocketResponse {
-    pub id: Option<UserId>, // TODO: in here?
-    pub message: ClientRequest,
+    pub user_id: UserId, // TODO: in here?
+    pub message: ClientResponse,
 }
 
 // API messages
@@ -80,7 +80,7 @@ pub enum ClientRequest {
     GetServer,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub enum ClientResponse {
     // Connected
     Connected { user_id: UserId },
@@ -88,6 +88,8 @@ pub enum ClientResponse {
     JoinedQueue,
     // Constant ping to let user know still connected
     QueuePing { time_elapsed: u32 },
+    // Notify user to connect to server at given IP
+    MatchFound { game_id: String },
     // Notify user to connect to server at given IP
     JoinServer { server_ip: Ipv6Addr },
     // Error occurred

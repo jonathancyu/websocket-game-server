@@ -5,6 +5,7 @@ use tokio::sync::{
     Mutex,
 };
 
+#[derive(Clone)]
 pub struct Channel<T> {
     pub sender: Sender<T>,
     pub receiver: Arc<Mutex<Receiver<T>>>,
