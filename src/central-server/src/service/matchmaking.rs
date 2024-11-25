@@ -10,9 +10,7 @@ use tokio::sync::{
 };
 use tracing::{error, info, warn};
 
-use crate::model::messages::{
-    MatchDetails, MatchmakingRequest, MatchmakingResponse, Player, UserId,
-};
+use crate::model::messages::{Game, MatchmakingRequest, MatchmakingResponse, Player, UserId};
 
 pub struct MatchmakingService {
     queue: VecDeque<Player>,
@@ -48,15 +46,11 @@ impl MatchmakingService {
             // Notify players
             let _ = player1
                 .sender
-                .send(MatchmakingResponse::MatchFound(MatchDetails {
-                    server: game.id.clone(),
-                }))
+                .send(MatchmakingResponse::MatchFound(game.clone()))
                 .await;
             let _ = player2
                 .sender
-                .send(MatchmakingResponse::MatchFound(MatchDetails {
-                    server: game.id.clone(),
-                }))
+                .send(MatchmakingResponse::MatchFound(game.clone()))
                 .await;
 
             // Add game

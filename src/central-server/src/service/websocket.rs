@@ -74,11 +74,7 @@ impl WebSocketHandler {
                 panic!("Failed to bind to {}: {}", address, e);
             });
         info!("Initialized ws listener: {}", address);
-        let mut read_mm_interval = interval(Duration::from_secs(5));
         loop {
-            // TODO: PICK UP HERE. need to get the WS SENDER for this
-            self.read_matchmaking_messages(mm_receiver.clone()).await; // ISSUE: does this belong
-                                                                       // here?
             tokio::select! {
                 result = ws_listener.accept() => {
                     match result {
@@ -127,66 +123,62 @@ impl WebSocketHandler {
         // TODO: implement with protobuf (prost)
         let stream = accept_async(stream).await.unwrap();
         let (mut ws_sender, mut ws_receiver) = stream.split();
-        // TODO: PICK UP HERE. Need to get pipe from matchmaking to this specific thread.
+        let interval = interval(Duration::from_secs(5));
         loop {
-            tokio::select! {
-                msg = ws_receiver.next() => {
-                    let msg = match msg {
-                        None => {
-                            debug!("Websocket closed");
-                            // TODO: Likely should be handled on the matchmaking end
+            let msg = ws_receiver.next().await;
+            let msg = match msg {
+                None => {
+                    debug!("Websocket closed");
+                    // TODO: Likely should be handled on the matchmaking end
 
-                            // mm_sender
-                            //     .send(MatchmakingRequest::Disconnected(connection.user_id.clone()))
-                            //     .await
-                            //     .expect("Failed to send leave queue");
-                            break;
-                        }
-                        Some(msg) => msg,
-                    }
-                    .expect("Couldn't unwrap msg");
+                    // mm_sender
+                    //     .send(MatchmakingRequest::Disconnected(connection.user_id.clone()))
+                    //     .await
+                    //     .expect("Failed to send leave queue");
+                    break;
+                }
+                Some(msg) => msg,
+            }
+            .expect("Couldn't unwrap msg");
 
-                    if !msg.is_text() {
-                        warn!("Got non message of type {:?}, skipping", msg);
-                        continue;
-                    }
+            if !msg.is_text() {
+                warn!("Got non message of type {:?}, skipping", msg);
+                continue;
+            }
 
-                    // Deserialize request
-                    let body = msg.to_text().unwrap();
-                    debug!(body);
-                    let request: SocketRequest =
-                        serde_json::from_str(body).expect("Could not deserialize request.");
-                    let mut state = state.lock().await;
-                    state
-                        .user_handles
-                        .entry(address)
-                        .or_insert_with(|| Connection {
-                            user_id: UserId(Uuid::new_v4()),
-                            mm_to_ws: Channel::from(mpsc::channel(100)),
-                        });
-                    let connection = state.user_handles.get(&address).unwrap();
+            // Deserialize request
+            let body = msg.to_text().unwrap();
+            debug!(body);
+            let request: SocketRequest =
+                serde_json::from_str(body).expect("Could not deserialize request.");
+            let mut state = state.lock().await;
+            state
+                .user_handles
+                .entry(address)
+                .or_insert_with(|| Connection {
+                    user_id: UserId(Uuid::new_v4()),
+                    mm_to_ws: Channel::from(mpsc::channel(100)),
+                });
+            let connection = state.user_handles.get(&address).unwrap();
 
-                    debug!("Got message {:?}", &msg);
+            debug!("Got message {:?}", &msg);
 
-                    let response = match request.request {
-                        ClientRequest::JoinQueue => {
-                            let mm_request = MatchmakingRequest::JoinQueue(Player {
-                                id: connection.user_id.clone(),
-                                sender: connection.mm_to_ws.sender.clone(),
-                            });
-                            mm_sender.send(mm_request).await.unwrap();
-                            ClientResponse::JoinedQueue
-                        }
-                        ClientRequest::Ping => ClientResponse::QueuePing { time_elapsed: 0u32 },
-                        ClientRequest::GetServer => ClientResponse::JoinServer {
-                            server_ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
-                        },
-                    };
-                    let response = serde_json::to_string(&response).expect("Could not serialize response.");
-                    ws_sender.send(Message::Text(response)).await.unwrap();
-
+            let response = match request.request {
+                ClientRequest::JoinQueue => {
+                    let mm_request = MatchmakingRequest::JoinQueue(Player {
+                        id: connection.user_id.clone(),
+                        sender: connection.mm_to_ws.sender.clone(),
+                    });
+                    mm_sender.send(mm_request).await.unwrap();
+                    ClientResponse::JoinedQueue
+                }
+                ClientRequest::Ping => ClientResponse::QueuePing { time_elapsed: 0u32 },
+                ClientRequest::GetServer => ClientResponse::JoinServer {
+                    server_ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
                 },
             };
+            let response = serde_json::to_string(&response).expect("Could not serialize response.");
+            ws_sender.send(Message::Text(response)).await.unwrap();
         }
     }
 }
