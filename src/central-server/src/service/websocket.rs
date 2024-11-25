@@ -108,7 +108,7 @@ impl WebSocketHandler {
         // TODO: implement with protobuf (prost)
         let stream = accept_async(stream).await.unwrap();
         let (mut ws_sender, mut ws_receiver) = stream.split();
-        let mut interval = time::interval(Duration::from_secs(5));
+        let mut interval = time::interval(Duration::from_secs(1));
         let mut connection_id: Option<UserId> = None;
         loop {
             tokio::select! {
@@ -249,7 +249,7 @@ impl WebSocketHandler {
                     sender: connection.mm_to_ws.sender.clone(),
                 });
                 mm_sender.send(mm_request).await.unwrap();
-                ClientResponse::JoinedQueue
+                ClientResponse::AckJoinQueue
             }
             ClientRequest::Ping => ClientResponse::QueuePing { time_elapsed: 0u32 },
             ClientRequest::GetServer => ClientResponse::JoinServer {

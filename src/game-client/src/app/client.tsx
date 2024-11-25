@@ -43,7 +43,7 @@ type MatchmakingResponse =
 
 type SocketResponse = {
   userId: string | null;
-  response: MatchmakingResponse;
+  message: MatchmakingResponse;
 };
 
 const requestFactory = {
@@ -72,7 +72,7 @@ enum ConnectionStatus {
 
 export default function Client({ id }: ClientProps) {
   const [inQueue, setInQueue] = useState<boolean>(true);
-  const [messages, setMessages] = useState<string[]>([]);
+  const [messages, setMessages] = useState<MatchmakingResponse[]>([]);
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
@@ -102,7 +102,7 @@ export default function Client({ id }: ClientProps) {
 
     newSocket.onmessage = (event) => {
       const message = JSON.parse(event.data) as SocketResponse;
-      match(message.response).with({ kind: "Connected" }, ({ Connected }) => {
+      match(message.message).with({ kind: "Connected" }, ({ Connected }) => {
         if (!Connected.userId) {
           console.log("Got Connected without userid");
         }
@@ -110,7 +110,7 @@ export default function Client({ id }: ClientProps) {
           setUserId(Connected.userId);
         }
       });
-      setMessages((previous) => [...previous, event.data]);
+      setMessages((previous) => [...previous, message.message]);
     };
 
     newSocket.onclose = (event) => {
@@ -136,9 +136,32 @@ export default function Client({ id }: ClientProps) {
     }
   }
 
+  function spinner() {
+    return (
+      <span className="inline-flex items-center text-yellow-600">
+        <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+            fill="none"
+          />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          />
+        </svg>
+        Connecting...
+      </span>
+    );
+  }
+
   return (
     <div className="m-2 space-y-4 text-black">
-      {connectionStatus}
       <div className="space-x-4">
         {(connectionStatus == ConnectionStatus.Off ||
           connectionStatus == ConnectionStatus.Failed) && (
@@ -149,27 +172,7 @@ export default function Client({ id }: ClientProps) {
             Join Queue
           </button>
         )}
-        {connectionStatus == ConnectionStatus.Connecting && (
-          <span className="inline-flex items-center text-yellow-600">
-            <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-                fill="none"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            Connecting...
-          </span>
-        )}
+        {connectionStatus == ConnectionStatus.Connecting && spinner()}
         {connectionStatus == ConnectionStatus.Failed && (
           <span className="inline-flex items-center text-red-600">
             <svg
@@ -205,7 +208,7 @@ export default function Client({ id }: ClientProps) {
             {messages.map((message, index) => (
               <div key={index} className="mb-2 p-2 bg-white rounded shadow">
                 <pre className="whitespace-pre-wrap break-words">
-                  {JSON.stringify(JSON.parse(message), null, 2)}
+                  {JSON.stringify(message)}
                 </pre>
               </div>
             ))}

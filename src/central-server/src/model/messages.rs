@@ -85,6 +85,8 @@ pub enum ClientResponse {
     // Connected
     Connected { user_id: UserId },
     // Ack user joining queue
+    AckJoinQueue,
+    // User actually joined queue
     JoinedQueue,
     // Constant ping to let user know still connected
     QueuePing { time_elapsed: u32 },

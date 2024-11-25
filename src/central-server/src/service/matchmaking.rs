@@ -84,7 +84,7 @@ impl MatchmakingService {
         ws_receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
     ) {
         let mut receiver = ws_receiver.lock().await;
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(500));
 
         info!("Initialized matchmaking service");
         loop {
