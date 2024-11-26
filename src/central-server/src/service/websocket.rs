@@ -65,7 +65,6 @@ impl WebSocketHandler {
         shutdown_receiver: &mut broadcast::Receiver<()>,
         mm_sender: Sender<MatchmakingRequest>,
     ) {
-        // TODO: Implement polling mm listener
         let address = self.format_address();
         let ws_listener = TcpListener::bind(address.clone())
             .await

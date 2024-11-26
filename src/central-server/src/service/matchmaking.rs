@@ -3,12 +3,8 @@ use std::{
     sync::Arc,
 };
 
-use tokio::sync::{
-    broadcast,
-    mpsc::{Receiver, Sender},
-    Mutex,
-};
-use tracing::{error, info, warn};
+use tokio::sync::{broadcast, mpsc::Receiver, Mutex};
+use tracing::{debug, error, info, warn};
 
 use crate::model::messages::{Game, MatchmakingRequest, MatchmakingResponse, Player, UserId};
 
@@ -24,7 +20,7 @@ impl MatchmakingService {
         let mut unmatched_players: VecDeque<Player> = VecDeque::new();
         let mut matches: Vec<(Player, Player)> = vec![];
         while let Some(player) = self.queue.pop_front() {
-            info!("Reading queue");
+            debug!("Reading queue");
             if let Some(enemy) = unmatched_players.pop_front() {
                 info!("Matched {:?} and {:?}", player.id, enemy.id);
                 matches.push((player, enemy));
