@@ -1,132 +1,33 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
+import { useState } from "react";
+import useWebSocket, { ConnectionStatus } from "./hooks/socket";
+import { MatchmakingResponse } from "./shared/responses";
 import { match } from "ts-pattern";
-import { useEffect, useState } from "react";
-
-// Requests
-type JoinQueue = { JoinQueue: null };
-type Ping = { Ping: null };
-type MatchmakingRequest = JoinQueue | Ping;
-type SocketRequest = {
-  userId: string | null;
-  request: MatchmakingRequest;
-};
-// Reqponses
-interface Connected {
-  kind: "Connected";
-  Connected: { userId: string };
-}
-interface JoinedQueue {
-  kind: "JoinedQueue";
-  JoinedQueue: null;
-}
-interface QueuePing {
-  kind: "QueuePing";
-  QueuePing: { timeElapsed: number };
-}
-interface JoinServer {
-  kind: "JoinServer";
-  JoinServer: { serverIp: string };
-}
-interface Error {
-  kind: "Error";
-  Error: { message: string };
-}
-
-type MatchmakingResponse =
-  | Connected
-  | JoinedQueue
-  | QueuePing
-  | JoinServer
-  | Error;
-
-type SocketResponse = {
-  userId: string | null;
-  message: MatchmakingResponse;
-};
-
-const requestFactory = {
-  joinQueue: (userId: string | null) =>
-    ({
-      userId: userId,
-      request: { JoinQueue: null },
-    }) satisfies SocketRequest,
-  ping: (userId: string) =>
-    ({
-      userId: userId,
-      request: { Ping: null },
-    }) satisfies SocketRequest,
-};
+import { MatchmakingRequest } from "./shared/requests";
 
 type ClientProps = {
   id: string;
 };
 
-enum ConnectionStatus {
-  Off,
-  Connecting,
-  Connected,
-  Failed,
-}
-
 export default function Client({ id }: ClientProps) {
   const [inQueue, setInQueue] = useState<boolean>(true);
+  const socket = useWebSocket<MatchmakingRequest, MatchmakingResponse>();
   const [messages, setMessages] = useState<MatchmakingResponse[]>([]);
-  const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
-    ConnectionStatus.Off,
-  );
 
-  const connectWebSocket = () => {
-    if (socket !== null) {
-      console.log("Socket is already established");
-      return;
-    }
-
-    const newSocket = new WebSocket("ws://localhost:3001");
-    setConnectionStatus(ConnectionStatus.Connecting);
-
-    newSocket.onopen = () => {
-      const payload = JSON.stringify(requestFactory.joinQueue(userId));
-      console.log("Sent " + payload);
-      newSocket.send(payload);
-      setConnectionStatus(ConnectionStatus.Connected);
-    };
-
-    newSocket.onerror = (event: Event) => {
-      console.log("Error: ", event);
-      setConnectionStatus(ConnectionStatus.Failed);
-    };
-
-    newSocket.onmessage = (event) => {
-      const message = JSON.parse(event.data) as SocketResponse;
-      match(message.message).with({ kind: "Connected" }, ({ Connected }) => {
-        if (!Connected.userId) {
-          console.log("Got Connected without userid");
-        }
-        if (!userId) {
-          setUserId(Connected.userId);
-        }
-      });
-      setMessages((previous) => [...previous, message.message]);
-    };
-
-    newSocket.onclose = (event) => {
-      console.log(connectionStatus);
-      console.log("Closed websocket " + id);
-      setMessages([]);
-      setSocket(null);
-      setConnectionStatus(ConnectionStatus.Off);
-    };
-
-    setSocket(newSocket);
-  };
+  function onmessage(message: MatchmakingResponse) {
+    match(message).with({ kind: "Connected" }, ({ Connected }) => {
+      if (!Connected.userId) {
+        console.log("Got Connected without userid");
+      }
+    });
+    setMessages((previous) => [...previous, message]);
+  }
 
   function joinQueue() {
     setInQueue(true);
-    connectWebSocket();
+    socket.connect("ws://localhost:3001", onmessage);
   }
 
   function leaveQueue() {
@@ -138,7 +39,7 @@ export default function Client({ id }: ClientProps) {
 
   function spinner() {
     return (
-      <span className="inline-flex items-center text-yellow-600">
+      <span className="inline-flex items-center text-yellow-400">
         <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
           <circle
             className="opacity-25"
@@ -163,8 +64,8 @@ export default function Client({ id }: ClientProps) {
   return (
     <div className="m-2 space-y-4 text-black">
       <div className="space-x-4">
-        {(connectionStatus == ConnectionStatus.Off ||
-          connectionStatus == ConnectionStatus.Failed) && (
+        {(socket.connectionStatus == ConnectionStatus.Off ||
+          socket.connectionStatus == ConnectionStatus.Failed) && (
           <button
             className="px-6 py-2 rounded-md bg-blue-50 text-black border-2 border-blue-200 hover:bg-blue-100 transition-colors duration-200 font-medium shadow-sm"
             onClick={joinQueue}
@@ -172,8 +73,8 @@ export default function Client({ id }: ClientProps) {
             Join Queue
           </button>
         )}
-        {connectionStatus == ConnectionStatus.Connecting && spinner()}
-        {connectionStatus == ConnectionStatus.Failed && (
+        {socket.connectionStatus == ConnectionStatus.Connecting && spinner()}
+        {socket.connectionStatus == ConnectionStatus.Failed && (
           <span className="inline-flex items-center text-red-600">
             <svg
               className="h-5 w-5 mr-2"
@@ -191,7 +92,7 @@ export default function Client({ id }: ClientProps) {
             Connection Failed
           </span>
         )}
-        {connectionStatus == ConnectionStatus.Connected && (
+        {socket.connectionStatus == ConnectionStatus.Connected && (
           <button
             className="px-6 py-2 rounded-md bg-red-50 text-red-700 border-2 border-red-200 hover:bg-red-100 transition-colors duration-200 font-medium shadow-sm"
             onClick={leaveQueue}
