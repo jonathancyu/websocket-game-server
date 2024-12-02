@@ -105,19 +105,25 @@ impl WebSocketHandler {
     ) {
         info!("New ws connection: {}", address);
         // TODO: implement with protobuf (prost)
+        // ISSUE: We have N threads spawning instead of spawning 1 thread to read N connections
+        // (but lock state the whole time)
+
         let stream = accept_async(stream).await.unwrap();
         let (mut ws_sender, mut ws_receiver) = stream.split();
         let mut interval = time::interval(Duration::from_secs(1));
         let mut connection_id: Option<UserId> = None;
+
         loop {
             tokio::select! {
+                // Poll connection for any push messages
                 _ = interval.tick() => {
-                    let message = WebSocketHandler::poll_connection(state.clone(), connection_id.clone()).await;
-                    if let Some(response) = message {
+                    let response = WebSocketHandler::poll_pushed_messages(state.clone(), connection_id.clone()).await;
+                    if let Some(response) = response {
                         let response = serde_json::to_string(&response).expect("Could not serialize response.");
                         ws_sender.send(Message::Text(response)).await.unwrap();
                     }
                 }
+                // Otherwise, handle incoming messages
                 msg = ws_receiver.next() => {
                     let result = WebSocketHandler::handle_socket_message(
                         msg,
@@ -145,7 +151,8 @@ impl WebSocketHandler {
         }
     }
 
-    async fn poll_connection(
+    // TODO: Should just pass in the connection since it's cloneable.
+    async fn poll_pushed_messages(
         state: Arc<Mutex<WebSocketState>>,
         connection_id: Option<UserId>,
     ) -> Option<SocketResponse> {
@@ -170,9 +177,10 @@ impl WebSocketHandler {
             user_id: connection_id,
             message: match message {
                 MatchmakingResponse::QueueJoined => ClientResponse::JoinedQueue,
-                MatchmakingResponse::MatchFound(game) => {
-                    ClientResponse::MatchFound { game_id: game.id }
-                }
+                MatchmakingResponse::MatchFound(game) => ClientResponse::MatchFound {
+                    game_id: game.id,
+                    server_address: game.server_address,
+                },
             },
         })
     }
@@ -211,6 +219,7 @@ impl WebSocketHandler {
             Some(user_id) => user_id,
             None => UserId(Uuid::new_v4()),
         };
+
         // Lookup user's Connection by user_id
         let connection = state
             .lock()

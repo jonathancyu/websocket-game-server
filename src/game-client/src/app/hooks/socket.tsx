@@ -1,8 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import { Dispatch, SetStateAction, useState } from "react";
-import { MatchmakingResponse, SocketResponse } from "../shared/responses";
+import { useState } from "react";
 import { requestFactory } from "../shared/requests";
-import { match } from "ts-pattern";
 
 export enum ConnectionStatus {
   Off,
@@ -11,13 +8,22 @@ export enum ConnectionStatus {
   Failed,
 }
 
+export type SocketRequest<T> = {
+  userId: string | null;
+  request: T;
+};
+export type SocketResponse<T> = {
+  userId: string | null;
+  message: T;
+};
+
 // TODO: Can I not just make a class...???
 export type SocketHook<RQ, RS> = {
   // Fields
   connectionStatus: ConnectionStatus;
   // Methods
   connect: (url: string, onmessage: (message: RS) => void) => void;
-  sendMessage: (msg: RQ) => void;
+  send: (msg: RQ) => void;
   close: () => void;
 };
 
@@ -41,6 +47,7 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
 
     newSocket.onerror = (event: Event) => {
       console.log("Error: ", event);
+      // TODO: Retry logic?
       setConnectionStatus(ConnectionStatus.Failed);
     };
 
@@ -52,9 +59,11 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
       onmessage(message.message);
     };
 
-    newSocket.onclose = (event) => {
+    newSocket.onclose = (event: CloseEvent) => {
       console.log(connectionStatus);
-      console.log("Closed websocket");
+      console.log(
+        "Closed websocket with code " + event.wasClean + ":" + event.reason,
+      );
       setSocket(null);
       setConnectionStatus(ConnectionStatus.Off);
     };
@@ -65,7 +74,7 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
   return {
     connectionStatus: connectionStatus,
     connect: connectWebSocket,
-    sendMessage: (msg: RQ) => {
+    send: (msg: RQ) => {
       if (socket) {
         socket.send(JSON.stringify(msg));
       }

@@ -4,6 +4,10 @@ export interface Connected {
     kind: "Connected";
     Connected: { userId: string };
 }
+export interface AckJoinQueue {
+    kind: "AckJoinQueue";
+    AckJoinQueue: null;
+}
 export interface JoinedQueue {
     kind: "JoinedQueue";
     JoinedQueue: null;
@@ -12,9 +16,13 @@ export interface QueuePing {
     kind: "QueuePing";
     QueuePing: { timeElapsed: number };
 }
+export interface MatchFound {
+    kind: "MatchFound";
+    MatchFound: { game_id: string, server_address: string };
+}
 export interface JoinServer {
     kind: "JoinServer";
-    JoinServer: { serverIp: string };
+    JoinServer: { server_address: string };
 }
 export interface Error {
     kind: "Error";
@@ -25,13 +33,11 @@ export interface Error {
 // TODO: Need to abstract this out
 export type MatchmakingResponse =
     | Connected
+    | AckJoinQueue
     | JoinedQueue
     | QueuePing
+    | MatchFound
     | JoinServer
     | Error;
 
-export type SocketResponse<T> = {
-    userId: string | null;
-    message: T;
-};
 

@@ -13,27 +13,32 @@ type ClientProps = {
 
 export default function Client({ id }: ClientProps) {
   const [inQueue, setInQueue] = useState<boolean>(true);
-  const socket = useWebSocket<MatchmakingRequest, MatchmakingResponse>();
+  const queue = useWebSocket<MatchmakingRequest, MatchmakingResponse>();
   const [messages, setMessages] = useState<MatchmakingResponse[]>([]);
+  const [gameAddress, setGameAddress] = useState<string | null>(null);
 
   function onmessage(message: MatchmakingResponse) {
-    match(message).with({ kind: "Connected" }, ({ Connected }) => {
-      if (!Connected.userId) {
-        console.log("Got Connected without userid");
-      }
-    });
+    match(message)
+      .with({ kind: "Connected" }, ({ Connected }) => {
+        if (!Connected.userId) {
+          console.log("Got Connected without userid");
+        }
+      })
+      .with({ kind: "MatchFound" }, ({ MatchFound }) => {
+        setGameAddress(MatchFound.server_address);
+      });
     setMessages((previous) => [...previous, message]);
   }
 
   function joinQueue() {
     setInQueue(true);
-    socket.connect("ws://localhost:3001", onmessage);
+    queue.connect("ws://localhost:3001", onmessage);
   }
 
   function leaveQueue() {
     setInQueue(false);
-    if (socket) {
-      socket.close();
+    if (queue) {
+      queue.close();
     }
   }
 
@@ -62,10 +67,10 @@ export default function Client({ id }: ClientProps) {
   }
 
   return (
-    <div className="m-2 space-y-4 text-black">
+    <div className="m-2 space-y-4 text-black relative min-h-[200px]">
       <div className="space-x-4">
-        {(socket.connectionStatus == ConnectionStatus.Off ||
-          socket.connectionStatus == ConnectionStatus.Failed) && (
+        {(queue.connectionStatus == ConnectionStatus.Off ||
+          queue.connectionStatus == ConnectionStatus.Failed) && (
           <button
             className="px-6 py-2 rounded-md bg-blue-50 text-black border-2 border-blue-200 hover:bg-blue-100 transition-colors duration-200 font-medium shadow-sm"
             onClick={joinQueue}
@@ -73,8 +78,8 @@ export default function Client({ id }: ClientProps) {
             Join Queue
           </button>
         )}
-        {socket.connectionStatus == ConnectionStatus.Connecting && spinner()}
-        {socket.connectionStatus == ConnectionStatus.Failed && (
+        {queue.connectionStatus == ConnectionStatus.Connecting && spinner()}
+        {queue.connectionStatus == ConnectionStatus.Failed && (
           <span className="inline-flex items-center text-red-600">
             <svg
               className="h-5 w-5 mr-2"
@@ -92,7 +97,7 @@ export default function Client({ id }: ClientProps) {
             Connection Failed
           </span>
         )}
-        {socket.connectionStatus == ConnectionStatus.Connected && (
+        {queue.connectionStatus == ConnectionStatus.Connected && (
           <button
             className="px-6 py-2 rounded-md bg-red-50 text-red-700 border-2 border-red-200 hover:bg-red-100 transition-colors duration-200 font-medium shadow-sm"
             onClick={leaveQueue}
@@ -102,18 +107,19 @@ export default function Client({ id }: ClientProps) {
         )}
       </div>
 
+
       {inQueue && messages.length > 0 && (
-        <div className="mt-4">
-          <h3 className="text-lg font-semibold mb-2">Messages:</h3>
-          <div className="bg-gray-100 p-4 rounded-lg max-h-60 overflow-y-auto">
-            {messages.map((message, index) => (
-              <div key={index} className="mb-2 p-2 bg-white rounded shadow">
-                <pre className="whitespace-pre-wrap break-words">
-                  {JSON.stringify(message)}
-                </pre>
-              </div>
-            ))}
-          </div>
+        <div className="absolute top-1 right-1 w-72 flex flex-col items-end">
+          {messages.map((message, index) => (
+            <div
+              key={index}
+              className="mb-1 p-1 bg-black/5 backdrop-blur-sm rounded shadow-sm max-w-full"
+            >
+              <pre className="whitespace-pre-wrap break-words text-xs">
+                {JSON.stringify(message, null, 0)}
+              </pre>
+            </div>
+          ))}
         </div>
       )}
     </div>

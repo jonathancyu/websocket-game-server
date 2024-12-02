@@ -1,8 +1,7 @@
 // Requests
 export type JoinQueue = { JoinQueue: null };
 export type Ping = { Ping: null };
-export type Connect = { Connect: null };
-export type MatchmakingRequest = Connect | JoinQueue | Ping;
+export type MatchmakingRequest = JoinQueue | Ping;
 export type SocketRequest = {
     userId: string | null;
     request: MatchmakingRequest;

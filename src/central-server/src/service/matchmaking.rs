@@ -37,6 +37,7 @@ impl MatchmakingService {
                 id: format!("Game: {:?} created", self.games.len()),
                 player1: player1.clone(),
                 player2: player2.clone(),
+                server_address: "ws://localhost:3002".to_string(),
             };
 
             // Notify players
@@ -80,7 +81,7 @@ impl MatchmakingService {
         ws_receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
     ) {
         let mut receiver = ws_receiver.lock().await;
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(500));
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(2000));
 
         info!("Initialized matchmaking service");
         loop {
@@ -136,9 +137,6 @@ impl MatchmakingService {
                 }
                 None => warn!("User {:?} not in queue", user_id),
             },
-            MatchmakingRequest::Disconnected(user_id) => {
-                warn!("User {:?} disconnected. What to do..?", user_id);
-            }
         };
     }
 }
