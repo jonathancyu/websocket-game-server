@@ -62,6 +62,7 @@ pub struct SocketRequest {
 }
 
 #[derive(Serialize, Clone)]
+#[serde(tag = "type")]
 pub struct SocketResponse {
     pub user_id: UserId, // TODO: in here?
     pub message: ClientResponse,
@@ -80,6 +81,7 @@ pub enum ClientRequest {
 }
 
 #[derive(Serialize, Clone)]
+#[serde(tag = "type")]
 pub enum ClientResponse {
     // Connected
     Connected {

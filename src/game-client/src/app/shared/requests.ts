@@ -8,11 +8,6 @@ export type SocketRequest = {
 };
 
 export const requestFactory = {
-    connect: (userId: string | null) =>
-    ({
-        userId: userId,
-        request: { Connect: null } satisfies Connect
-    }),
     joinQueue: (userId: string | null) =>
     ({
         userId: userId,

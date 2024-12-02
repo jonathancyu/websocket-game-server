@@ -6,6 +6,7 @@ import useWebSocket, { ConnectionStatus } from "./hooks/socket";
 import { MatchmakingResponse } from "./shared/responses";
 import { match } from "ts-pattern";
 import { MatchmakingRequest } from "./shared/requests";
+import Game from "./game";
 
 type ClientProps = {
   id: string;
@@ -19,13 +20,17 @@ export default function Client({ id }: ClientProps) {
 
   function onmessage(message: MatchmakingResponse) {
     match(message)
-      .with({ kind: "Connected" }, ({ Connected }) => {
-        if (!Connected.userId) {
+      .with({ type: "Connected" }, ({ userId }) => {
+        if (!userId) {
           console.log("Got Connected without userid");
         }
       })
-      .with({ kind: "MatchFound" }, ({ MatchFound }) => {
-        setGameAddress(MatchFound.server_address);
+      .with({ type: "MatchFound" }, ({ server_address }) => {
+        console.log("Found address " + server_address);
+        setGameAddress(server_address);
+      })
+      .otherwise((msg) => {
+        console.log(msg);
       });
     setMessages((previous) => [...previous, message]);
   }

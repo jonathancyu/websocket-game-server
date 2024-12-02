@@ -63,6 +63,7 @@ impl MatchmakingService {
             games: Vec::new(),
         }
     }
+
     pub fn add_user(&mut self, player: Player) -> Result<(), &'static str> {
         let user_id = player.clone().id;
         if !self.users_in_queue.contains(&user_id) {
