@@ -31,12 +31,12 @@ use crate::{
 };
 
 #[derive(Clone)]
-struct Connection {
+pub struct Connection {
     user_id: UserId,
     mm_to_ws: Channel<MatchmakingResponse>,
 }
 
-struct WebSocketState {
+pub struct WebSocketState {
     user_handles: HashMap<UserId, Connection>,
 }
 impl WebSocketState {}
@@ -46,21 +46,18 @@ pub struct WebSocketHandler {
     pub port: String,
     state: Arc<Mutex<WebSocketState>>,
 }
-impl WebSocketHandler {
-    pub fn new(url: String, port: String) -> Self {
-        Self {
-            url,
-            port,
-            state: Arc::new(Mutex::new(WebSocketState {
-                user_handles: HashMap::new(),
-            })),
-        }
-    }
-    fn format_address(&self) -> String {
-        format!("{}:{}", self.url, self.port)
-    }
-
-    pub async fn listen(
+pub trait WebsocketHandlerTrait<SocketState, ConnectionState, RQ, RS> {
+    // TODO: rename after refactor
+    fn listen(
+        &mut self,
+        shutdown_receiver: &mut broadcast::Receiver<()>,
+        mm_sender: Sender<RQ>,
+    ) -> impl std::future::Future<Output = ()> + Send;
+}
+impl WebsocketHandlerTrait<WebSocketState, Connection, MatchmakingRequest, MatchmakingResponse>
+    for WebSocketHandler
+{
+    async fn listen(
         &mut self,
         shutdown_receiver: &mut broadcast::Receiver<()>,
         mm_sender: Sender<MatchmakingRequest>,
@@ -95,6 +92,20 @@ impl WebSocketHandler {
             };
         }
         info!("Exited ws listener");
+    }
+}
+impl WebSocketHandler {
+    pub fn new(url: String, port: String) -> Self {
+        Self {
+            url,
+            port,
+            state: Arc::new(Mutex::new(WebSocketState {
+                user_handles: HashMap::new(),
+            })),
+        }
+    }
+    fn format_address(&self) -> String {
+        format!("{}:{}", self.url, self.port)
     }
 
     async fn handle_connection(

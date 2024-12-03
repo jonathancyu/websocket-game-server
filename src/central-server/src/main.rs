@@ -1,3 +1,4 @@
+use server::service::websocket::WebsocketHandlerTrait;
 use server::service::{matchmaking::MatchmakingService, websocket::WebSocketHandler};
 use server::utility::channel::Channel;
 use tokio::sync::broadcast;
