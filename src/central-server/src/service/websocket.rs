@@ -53,6 +53,12 @@ pub trait WebsocketHandlerTrait<SocketState, ConnectionState, RQ, RS> {
         shutdown_receiver: &mut broadcast::Receiver<()>,
         mm_sender: Sender<RQ>,
     ) -> impl std::future::Future<Output = ()> + Send;
+    fn handle_connection(
+        state: Arc<Mutex<SocketState>>,
+        stream: TcpStream,
+        address: SocketAddr,
+        mm_sender: Sender<RQ>,
+    ) -> impl std::future::Future<Output = ()> + Send;
 }
 impl WebsocketHandlerTrait<WebSocketState, Connection, MatchmakingRequest, MatchmakingResponse>
     for WebSocketHandler
@@ -92,20 +98,6 @@ impl WebsocketHandlerTrait<WebSocketState, Connection, MatchmakingRequest, Match
             };
         }
         info!("Exited ws listener");
-    }
-}
-impl WebSocketHandler {
-    pub fn new(url: String, port: String) -> Self {
-        Self {
-            url,
-            port,
-            state: Arc::new(Mutex::new(WebSocketState {
-                user_handles: HashMap::new(),
-            })),
-        }
-    }
-    fn format_address(&self) -> String {
-        format!("{}:{}", self.url, self.port)
     }
 
     async fn handle_connection(
@@ -160,6 +152,20 @@ impl WebSocketHandler {
                 }
             }
         }
+    }
+}
+impl WebSocketHandler {
+    pub fn new(url: String, port: String) -> Self {
+        Self {
+            url,
+            port,
+            state: Arc::new(Mutex::new(WebSocketState {
+                user_handles: HashMap::new(),
+            })),
+        }
+    }
+    fn format_address(&self) -> String {
+        format!("{}:{}", self.url, self.port)
     }
 
     // TODO: Should just pass in the connection since it's cloneable.
