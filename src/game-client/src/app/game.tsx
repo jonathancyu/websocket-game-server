@@ -1,5 +1,6 @@
 "use client";
-import useWebSocket from "./hooks/socket";
+import { useEffect } from "react";
+import useWebSocket, { ConnectionStatus } from "./hooks/socket";
 
 export enum Move {
   Rock = "rock",
@@ -19,7 +20,11 @@ export type GameComponentProps = {
 
 export default function Game({ serverAddress }: GameComponentProps) {
   const socket = useWebSocket<GameRequest, GameResponse>();
-  socket.connect(serverAddress, console.log);
+  useEffect(() => {
+    if (socket.connectionStatus == ConnectionStatus.Off) {
+      socket.connect(serverAddress, console.log);
+    }
+  }, [socket, serverAddress]);
 
   const handleMove = (move: Move) => {
     socket.send({ move });

@@ -38,10 +38,10 @@ export default function Client({ id }: ClientProps) {
           ))}
         </div>
       )}
-      {/* {state.screen == "queue" && ( */}
-      {/*   <Queue setMessages={setMessages} joinGame={joinGame} /> */}
-      {/* )} */}
-      {state.screen == "game" && <Game serverAddress={""} />}
+      {state.screen == "queue" && (
+        <Queue setMessages={setMessages} joinGame={joinGame} />
+      )}
+      {state.screen == "game" && <Game serverAddress={state.serverAddress} />}
     </div>
   );
 }
