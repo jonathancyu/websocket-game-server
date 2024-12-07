@@ -21,7 +21,6 @@ impl MatchmakingService {
         let mut unmatched_players: VecDeque<Player> = VecDeque::new();
         let mut matches: Vec<(Player, Player)> = vec![];
         while let Some(player) = self.queue.pop_front() {
-            debug!("Reading queue");
             if let Some(enemy) = unmatched_players.pop_front() {
                 info!("Matched {:?} and {:?}", player.id, enemy.id);
                 matches.push((player, enemy));
@@ -104,6 +103,7 @@ impl MatchmakingService {
     }
 
     async fn handle_message(&mut self, message: Option<MatchmakingRequest>) {
+        debug!("msg: {:?}", message);
         let Some(message) = message else {
             info!("Got empty message");
             return;

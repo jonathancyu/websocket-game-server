@@ -6,6 +6,7 @@ use common::{
     websocket::{Connection, WebSocketState, WebsocketHandler},
 };
 use tokio::sync::{mpsc::Sender, Mutex};
+use tracing::debug;
 
 use crate::model::messages::{
     ClientRequest, ClientResponse, MatchmakingRequest, MatchmakingResponse, Player,
@@ -54,8 +55,9 @@ impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest, Matchma
                     id: connection.user_id.clone(),
                     sender: connection.to_socket.sender.clone(),
                 });
+                debug!("Send mm {:?}", mm_request);
                 mm_sender.send(mm_request).await.unwrap();
-                None // We
+                None
             }
             ClientRequest::Ping => Some(ClientResponse::QueuePing { time_elapsed: 0u32 }),
             ClientRequest::GetServer => Some(ClientResponse::JoinServer {

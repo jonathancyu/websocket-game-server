@@ -13,7 +13,7 @@ use tokio::{
     time,
 };
 use tokio_tungstenite::{accept_async, tungstenite::Message};
-use tracing::{debug, error, field::debug, info};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use crate::{
@@ -120,7 +120,6 @@ where
 
         let stream = accept_async(stream).await.unwrap();
         let (mut ws_sender, mut ws_receiver) = stream.split();
-        let mut interval = time::interval(Duration::from_secs(1));
         // TODO: handshake, then resolve connection from state
         let _connection_id: Option<UserId> = None;
         let user_id = UserId(Uuid::new_v4());
@@ -134,15 +133,20 @@ where
                 .await
                 .user_handles
                 .entry(user_id.clone())
-                .or_insert_with(|| Connection::new(user_id, Channel::from(mpsc::channel(100))))
+                .or_insert_with(|| {
+                    Connection::new(user_id.clone(), Channel::from(mpsc::channel(100)))
+                })
                 .clone()
         };
 
+        debug!("Listening to {:?}", user_id.clone());
+        let mut interval = time::interval(Duration::from_secs(1));
         loop {
             tokio::select! {
                 // Poll connection for any push messages
                 _ = interval.tick() => {
                     let response = Self::handle_internal_message(connection.clone()).await;
+                    debug!("poll");
                     if let Some(response) = response {
                         let response = serde_json::to_string(&response).expect("Could not serialize response.");
                         ws_sender.send(Message::Text(response)).await.unwrap();
@@ -151,6 +155,7 @@ where
 
                 // Otherwise, handle incoming messages
                 msg = ws_receiver.next() => {
+                    debug!("msg: {:?}", msg);
                     let Some(msg) = msg else {
                         debug!("WS received empty message, TODO"); // TODO: what to do
                         break;
