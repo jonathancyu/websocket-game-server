@@ -7,6 +7,7 @@ use std::{
 
 use axum::async_trait;
 use futures_util::{SinkExt, StreamExt};
+use serde::{Deserialize, Serialize};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::{
@@ -32,31 +33,41 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct Connection<RS> {
+pub struct Connection<RS>
+where
+    RS: Clone,
+{
     user_id: UserId,
     to_socket: Channel<RS>,
 }
-
-pub struct WebSocketState {
-    user_handles: HashMap<UserId, Connection<MatchmakingResponse>>,
+impl<RS> Connection<RS>
+where
+    RS: Clone,
+{
+    pub fn new(user_id: UserId, to_socket: Channel<RS>) -> Self {
+        Connection { user_id, to_socket }
+    }
 }
-impl WebSocketState {}
+
+pub struct WebSocketState<T: Clone> {
+    user_handles: HashMap<UserId, Connection<T>>,
+}
 
 pub struct WebSocketHandler {
-    state: Arc<Mutex<WebSocketState>>,
+    state: Arc<Mutex<WebSocketState<MatchmakingResponse>>>,
 }
+
 #[async_trait]
-pub trait WebsocketHandlerTrait<
-    SocketState,
-    ConnectionState,
-    ExternalRQ,
-    ExternalRS,
-    InternalRQ: Send + 'static,
-    InternalRS,
->
+pub trait WebsocketHandlerTrait<ConnectionState, ExternalRQ, ExternalRS, InternalRQ, InternalRS>
+where
+    Self: 'static,
+    ExternalRQ: Deserialize<'static>,
+    ExternalRS: Serialize + Send,
+    InternalRQ: Clone + Send + 'static,
+    InternalRS: Clone + Send + 'static,
 {
     // TODO: rename after refactor
-    fn get_state(&self) -> Arc<Mutex<SocketState>>;
+    fn get_state(&self) -> Arc<Mutex<WebSocketState<InternalRS>>>;
     async fn listen(
         &mut self,
         address: String,
@@ -96,11 +107,59 @@ pub trait WebsocketHandlerTrait<
 
     // Thread to handle connection lifetime
     async fn connection_thread(
-        state: Arc<Mutex<SocketState>>,
+        state: Arc<Mutex<WebSocketState<InternalRS>>>,
         stream: TcpStream,
         address: SocketAddr,
         mm_sender: Sender<InternalRQ>,
-    );
+    ) {
+        info!("New ws connection: {}", address);
+
+        let stream = accept_async(stream).await.unwrap();
+        let (mut ws_sender, mut ws_receiver) = stream.split();
+        let mut interval = time::interval(Duration::from_secs(1));
+        // TODO: handshake, then resolve connection from state
+        let mut connection_id: Option<UserId> = None;
+        let user_id = UserId(Uuid::new_v4());
+
+        // Lookup user's Connection by user_id
+        let connection = state
+            .lock()
+            .await
+            .user_handles
+            .entry(user_id.clone())
+            .or_insert_with(|| Connection::new(user_id, Channel::from(mpsc::channel(100))))
+            .clone();
+
+        loop {
+            tokio::select! {
+                // Poll connection for any push messages
+                _ = interval.tick() => {
+                    let response = Self::handle_internal_message(connection.clone()).await;
+                    if let Some(response) = response {
+                        let response = serde_json::to_string(&response).expect("Could not serialize response.");
+                        ws_sender.send(Message::Text(response)).await.unwrap();
+                    }
+                }
+
+                // Otherwise, handle incoming messages
+                msg = ws_receiver.next() => {
+                    let result = Self::handle_external_message(
+                        connection.clone(),
+                        msg,
+                        mm_sender.clone()
+                    ).await;
+
+                    match result  {
+                        Ok(response) => {
+                            let response = serde_json::to_string(&response).expect("Could not serialize response.");
+                            ws_sender.send(Message::Text(response)).await.unwrap();
+                        },
+                        Err(_) => break,
+                    };
+                }
+            }
+        }
+    }
 
     // Read internal message to potentially push a message back to the user.
     async fn handle_internal_message(
@@ -125,7 +184,6 @@ pub trait WebsocketHandlerTrait<
 #[async_trait]
 impl
     WebsocketHandlerTrait<
-        WebSocketState,
         Connection<MatchmakingResponse>,
         ClientRequest,
         ClientResponse,
@@ -133,68 +191,8 @@ impl
         MatchmakingResponse,
     > for WebSocketHandler
 {
-    fn get_state(&self) -> Arc<Mutex<WebSocketState>> {
+    fn get_state(&self) -> Arc<Mutex<WebSocketState<MatchmakingResponse>>> {
         self.state.clone()
-    }
-
-    async fn connection_thread(
-        state: Arc<Mutex<WebSocketState>>,
-        stream: TcpStream,
-        address: SocketAddr,
-        mm_sender: Sender<MatchmakingRequest>,
-    ) {
-        info!("New ws connection: {}", address);
-
-        let stream = accept_async(stream).await.unwrap();
-        let (mut ws_sender, mut ws_receiver) = stream.split();
-        let mut interval = time::interval(Duration::from_secs(1));
-        // TODO: handshake, then resolve connection from state
-        let mut connection_id: Option<UserId> = None;
-        let user_id = UserId(Uuid::new_v4());
-
-        // Lookup user's Connection by user_id
-        let connection = {
-            state
-                .lock()
-                .await
-                .user_handles
-                .entry(user_id.clone())
-                .or_insert_with(|| Connection {
-                    user_id: user_id.clone(),
-                    to_socket: Channel::from(mpsc::channel(100)),
-                })
-                .clone()
-        };
-
-        loop {
-            tokio::select! {
-                // Poll connection for any push messages
-                _ = interval.tick() => {
-                    let response = WebSocketHandler::handle_internal_message(connection.clone()).await;
-                    if let Some(response) = response {
-                        let response = serde_json::to_string(&response).expect("Could not serialize response.");
-                        ws_sender.send(Message::Text(response)).await.unwrap();
-                    }
-                }
-
-                // Otherwise, handle incoming messages
-                msg = ws_receiver.next() => {
-                    let result = WebSocketHandler::handle_external_message(
-                        connection.clone(),
-                        msg,
-                        mm_sender.clone()
-                    ).await;
-
-                    match result  {
-                        Ok(response) => {
-                            let response = serde_json::to_string(&response).expect("Could not serialize response.");
-                            ws_sender.send(Message::Text(response)).await.unwrap();
-                        },
-                        Err(_) => break,
-                    };
-                }
-            }
-        }
     }
 
     // TODO: Should just pass in the connection since it's cloneable.
