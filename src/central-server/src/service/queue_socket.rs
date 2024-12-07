@@ -2,13 +2,10 @@ use std::{net::Ipv6Addr, sync::Arc};
 
 use axum::async_trait;
 use common::{
-    model::messages::{SocketRequest, SocketResponse, UserId},
+    model::messages::SocketResponse,
     websocket::{Connection, WebSocketState, WebsocketHandler},
 };
 use tokio::sync::{mpsc::Sender, Mutex};
-use tokio_tungstenite::tungstenite::Message;
-use tracing::debug;
-use uuid::Uuid;
 
 use crate::model::messages::{
     ClientRequest, ClientResponse, MatchmakingRequest, MatchmakingResponse, Player,

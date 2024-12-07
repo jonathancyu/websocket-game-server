@@ -12,10 +12,7 @@ use tokio::{
     },
     time,
 };
-use tokio_tungstenite::{
-    accept_async,
-    tungstenite::{http::response, Message},
-};
+use tokio_tungstenite::{accept_async, tungstenite::Message};
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
