@@ -32,13 +32,13 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct Connection {
+pub struct Connection<RS> {
     user_id: UserId,
-    mm_to_ws: Channel<MatchmakingResponse>,
+    to_socket: Channel<RS>,
 }
 
 pub struct WebSocketState {
-    user_handles: HashMap<UserId, Connection>,
+    user_handles: HashMap<UserId, Connection<MatchmakingResponse>>,
 }
 impl WebSocketState {}
 
@@ -52,7 +52,7 @@ pub trait WebsocketHandlerTrait<
     ExternalRQ,
     ExternalRS,
     InternalRQ: Send + 'static,
-    InternalQS,
+    InternalRS,
 >
 {
     // TODO: rename after refactor
@@ -77,7 +77,7 @@ pub trait WebsocketHandlerTrait<
                             error!("Failed to accept connection from {} with error: {}", address, e);
                         }
                         Ok((stream, address)) => {
-                            tokio::spawn(Self::listen_to_connection(
+                            tokio::spawn(Self::connection_thread(
                                 self.get_state(),
                                 stream,
                                 address,
@@ -93,27 +93,30 @@ pub trait WebsocketHandlerTrait<
         }
         info!("Exited ws listener");
     }
-    async fn listen_to_connection(
+
+    // Thread to handle connection lifetime
+    async fn connection_thread(
         state: Arc<Mutex<SocketState>>,
         stream: TcpStream,
         address: SocketAddr,
         mm_sender: Sender<InternalRQ>,
     );
 
+    // Read internal message to potentially push a message back to the user.
     async fn handle_internal_message(
-        state: Arc<Mutex<WebSocketState>>,
-        connection_id: Option<UserId>,
+        connection: Connection<InternalRS>,
     ) -> Option<SocketResponse<ExternalRS>>;
 
+    // Read message from connection, return immediate response
     async fn handle_external_message(
+        connection: Connection<InternalRS>,
         message: Option<Result<Message, tungstenite::Error>>,
-        state: Arc<Mutex<WebSocketState>>,
         mm_sender: Sender<InternalRQ>,
     ) -> Result<SocketResponse<ExternalRS>, &'static str>;
 
     // Logic to handle a client's request
     async fn respond_to_request(
-        connection: &Connection,
+        connection: Connection<InternalRS>,
         request: ClientRequest,
         mm_sender: Sender<InternalRQ>,
     ) -> ExternalRS;
@@ -123,7 +126,7 @@ pub trait WebsocketHandlerTrait<
 impl
     WebsocketHandlerTrait<
         WebSocketState,
-        Connection,
+        Connection<MatchmakingResponse>,
         ClientRequest,
         ClientResponse,
         MatchmakingRequest,
@@ -134,26 +137,40 @@ impl
         self.state.clone()
     }
 
-    async fn listen_to_connection(
+    async fn connection_thread(
         state: Arc<Mutex<WebSocketState>>,
         stream: TcpStream,
         address: SocketAddr,
         mm_sender: Sender<MatchmakingRequest>,
     ) {
         info!("New ws connection: {}", address);
-        // ISSUE: We have N threads spawning instead of spawning 1 thread to read N connections
-        // (but lock state the whole time)
 
         let stream = accept_async(stream).await.unwrap();
         let (mut ws_sender, mut ws_receiver) = stream.split();
         let mut interval = time::interval(Duration::from_secs(1));
+        // TODO: handshake, then resolve connection from state
         let mut connection_id: Option<UserId> = None;
+        let user_id = UserId(Uuid::new_v4());
+
+        // Lookup user's Connection by user_id
+        let connection = {
+            state
+                .lock()
+                .await
+                .user_handles
+                .entry(user_id.clone())
+                .or_insert_with(|| Connection {
+                    user_id: user_id.clone(),
+                    to_socket: Channel::from(mpsc::channel(100)),
+                })
+                .clone()
+        };
 
         loop {
             tokio::select! {
                 // Poll connection for any push messages
                 _ = interval.tick() => {
-                    let response = WebSocketHandler::handle_internal_message(state.clone(), connection_id.clone()).await;
+                    let response = WebSocketHandler::handle_internal_message(connection.clone()).await;
                     if let Some(response) = response {
                         let response = serde_json::to_string(&response).expect("Could not serialize response.");
                         ws_sender.send(Message::Text(response)).await.unwrap();
@@ -163,21 +180,13 @@ impl
                 // Otherwise, handle incoming messages
                 msg = ws_receiver.next() => {
                     let result = WebSocketHandler::handle_external_message(
+                        connection.clone(),
                         msg,
-                        state.clone(),
                         mm_sender.clone()
                     ).await;
 
                     match result  {
                         Ok(response) => {
-                            if let Some(connection_id) = connection_id.clone() {
-                                if connection_id != response.user_id {
-                                    warn!("Somehow connection ID != response.user_id");
-                                }
-                            } else {
-                                connection_id = Some(response.clone().user_id);
-                            }
-
                             let response = serde_json::to_string(&response).expect("Could not serialize response.");
                             ws_sender.send(Message::Text(response)).await.unwrap();
                         },
@@ -190,28 +199,14 @@ impl
 
     // TODO: Should just pass in the connection since it's cloneable.
     async fn handle_internal_message(
-        state: Arc<Mutex<WebSocketState>>,
-        connection_id: Option<UserId>,
+        connection: Connection<MatchmakingResponse>,
     ) -> Option<SocketResponse<ClientResponse>> {
-        let Some(connection_id) = connection_id else {
-            warn!("Cannot poll connection w/o connection_id");
-            return None;
-        };
-        // Get connection handle
-        let connection = state
-            .lock()
-            .await
-            .user_handles
-            .get(&connection_id)
-            .expect("User has connection_id but is not in user_handles")
-            .clone();
-
         // See if MM sent any messages
-        let message = connection.mm_to_ws.receiver.lock().await.recv().await?;
+        let message = connection.to_socket.receiver.lock().await.recv().await?;
 
         // If message was sent, forward to user
         Some(SocketResponse {
-            user_id: connection_id,
+            user_id: connection.user_id,
             message: match message {
                 MatchmakingResponse::QueueJoined => ClientResponse::JoinedQueue,
                 MatchmakingResponse::MatchFound(game) => ClientResponse::MatchFound {
@@ -223,8 +218,8 @@ impl
     }
 
     async fn handle_external_message(
+        connection: Connection<MatchmakingResponse>,
         message: Option<Result<Message, tungstenite::Error>>,
-        state: Arc<Mutex<WebSocketState>>,
         mm_sender: Sender<MatchmakingRequest>,
     ) -> Result<SocketResponse<ClientResponse>, &'static str> {
         let msg = match message {
@@ -257,29 +252,17 @@ impl
             None => UserId(Uuid::new_v4()),
         };
 
-        // Lookup user's Connection by user_id
-        let connection = state
-            .lock()
-            .await
-            .user_handles
-            .entry(user_id.clone())
-            .or_insert_with(|| Connection {
-                user_id: user_id.clone(),
-                mm_to_ws: Channel::from(mpsc::channel(100)),
-            })
-            .clone();
-
         debug!("Got message {:?}", &msg);
 
         Ok(SocketResponse {
             user_id,
-            message: WebSocketHandler::respond_to_request(&connection, request.request, mm_sender)
+            message: WebSocketHandler::respond_to_request(connection, request.request, mm_sender)
                 .await,
         })
     }
 
     async fn respond_to_request(
-        connection: &Connection,
+        connection: Connection<MatchmakingResponse>,
         request: ClientRequest,
         mm_sender: Sender<MatchmakingRequest>,
     ) -> ClientResponse {
@@ -287,7 +270,7 @@ impl
             ClientRequest::JoinQueue => {
                 let mm_request = MatchmakingRequest::JoinQueue(Player {
                     id: connection.user_id.clone(),
-                    sender: connection.mm_to_ws.sender.clone(),
+                    sender: connection.to_socket.sender.clone(),
                 });
                 mm_sender.send(mm_request).await.unwrap();
                 ClientResponse::AckJoinQueue
