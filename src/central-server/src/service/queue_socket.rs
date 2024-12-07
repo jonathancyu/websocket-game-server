@@ -45,34 +45,6 @@ impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest, Matchma
         })
     }
 
-    async fn handle_external_message(
-        connection: Connection<MatchmakingResponse>,
-        message: Message,
-        mm_sender: Sender<MatchmakingRequest>,
-    ) -> Result<SocketResponse<ClientResponse>, &'static str> {
-        if !message.is_text() {
-            return Err("Got non-text message :(");
-        }
-
-        // Deserialize request
-        let body = message.to_text().unwrap();
-        debug!(body);
-        let request: SocketRequest<ClientRequest> =
-            serde_json::from_str(body).expect("Could not deserialize request.");
-        // If client provided user_id, use it. Otherwise give them a new one.
-        let user_id = match request.user_id {
-            Some(user_id) => user_id,
-            None => UserId(Uuid::new_v4()),
-        };
-
-        debug!("Got message {:?}", &message);
-        Ok(SocketResponse {
-            user_id,
-            message: QueueSocket::respond_to_request(connection, request.request, mm_sender)
-                .await,
-        })
-    }
-
     async fn respond_to_request(
         connection: Connection<MatchmakingResponse>,
         request: ClientRequest,

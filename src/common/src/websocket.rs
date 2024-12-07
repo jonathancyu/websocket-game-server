@@ -17,7 +17,7 @@ use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use crate::{
-    model::messages::{SocketResponse, UserId},
+    model::messages::{SocketRequest, SocketResponse, UserId},
     utility::Channel,
 };
 
@@ -65,8 +65,8 @@ where
 pub trait WebsocketHandler<ExternalRQ, ExternalRS, InternalRQ, InternalRS>
 where
     Self: 'static,
-    ExternalRQ: Deserialize<'static>,
-    ExternalRS: Serialize + Send,
+    ExternalRQ: for<'de> Deserialize<'de> + Send + 'static,
+    ExternalRS: Send + Serialize + 'static,
     InternalRQ: Clone + Send + 'static,
     InternalRS: Clone + Send + 'static,
 {
@@ -170,18 +170,37 @@ where
             }
         }
     }
-
-    // Read internal message to potentially push a message back to the user.
-    async fn handle_internal_message(
-        connection: Connection<InternalRS>,
-    ) -> Option<SocketResponse<ExternalRS>>;
-
     // Read message from connection, return immediate response
     async fn handle_external_message(
         connection: Connection<InternalRS>,
         message: Message,
         mm_sender: Sender<InternalRQ>,
-    ) -> Result<SocketResponse<ExternalRS>, &'static str>;
+    ) -> Result<SocketResponse<ExternalRS>, &'static str> {
+        if !message.is_text() {
+            return Err("Got non-text message :(");
+        }
+
+        // Deserialize request
+        let body = message.to_text().unwrap();
+        let request: SocketRequest<ExternalRQ> =
+            serde_json::from_str(body).expect("Could not deserialize request.");
+        // If client provided user_id, use it. Otherwise give them a new one.
+        let user_id = match request.user_id {
+            Some(user_id) => user_id,
+            None => UserId(Uuid::new_v4()),
+        };
+
+        debug!("Got message {:?}", &message);
+        Ok(SocketResponse {
+            user_id,
+            message: Self::respond_to_request(connection, request.request, mm_sender).await,
+        })
+    }
+
+    // Read internal message to potentially push a message back to the user.
+    async fn handle_internal_message(
+        connection: Connection<InternalRS>,
+    ) -> Option<SocketResponse<ExternalRS>>;
 
     // Logic to handle a client's request
     async fn respond_to_request(
