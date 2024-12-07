@@ -49,20 +49,21 @@ impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest, Matchma
         connection: Connection<MatchmakingResponse>,
         request: ClientRequest,
         mm_sender: Sender<MatchmakingRequest>,
-    ) -> ClientResponse {
+    ) -> Option<ClientResponse> {
         match request {
             ClientRequest::JoinQueue => {
+                // Tell matchmaking to add user to the queue
                 let mm_request = MatchmakingRequest::JoinQueue(Player {
                     id: connection.user_id.clone(),
                     sender: connection.to_socket.sender.clone(),
                 });
                 mm_sender.send(mm_request).await.unwrap();
-                ClientResponse::AckJoinQueue
+                None // We
             }
-            ClientRequest::Ping => ClientResponse::QueuePing { time_elapsed: 0u32 },
-            ClientRequest::GetServer => ClientResponse::JoinServer {
+            ClientRequest::Ping => Some(ClientResponse::QueuePing { time_elapsed: 0u32 }),
+            ClientRequest::GetServer => Some(ClientResponse::JoinServer {
                 server_ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
-            },
+            }),
         }
     }
 }

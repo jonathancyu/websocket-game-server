@@ -12,7 +12,10 @@ use tokio::{
     },
     time,
 };
-use tokio_tungstenite::{accept_async, tungstenite::Message};
+use tokio_tungstenite::{
+    accept_async,
+    tungstenite::{http::response, Message},
+};
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
@@ -70,8 +73,8 @@ where
     InternalRQ: Clone + Send + 'static,
     InternalRS: Clone + Send + 'static,
 {
-    // TODO: rename after refactor
     fn get_state(&self) -> Arc<Mutex<WebSocketState<InternalRS>>>;
+
     async fn listen(
         &mut self,
         address: String,
@@ -175,7 +178,7 @@ where
         connection: Connection<InternalRS>,
         message: Message,
         mm_sender: Sender<InternalRQ>,
-    ) -> Result<SocketResponse<ExternalRS>, &'static str> {
+    ) -> Result<Option<SocketResponse<ExternalRS>>, &'static str> {
         if !message.is_text() {
             return Err("Got non-text message :(");
         }
@@ -191,10 +194,12 @@ where
         };
 
         debug!("Got message {:?}", &message);
-        Ok(SocketResponse {
+        let response = Self::respond_to_request(connection, request.request, mm_sender).await;
+
+        Ok(response.map(|response| SocketResponse {
             user_id,
-            message: Self::respond_to_request(connection, request.request, mm_sender).await,
-        })
+            message: response,
+        }))
     }
 
     // Read internal message to potentially push a message back to the user.
@@ -207,5 +212,5 @@ where
         connection: Connection<InternalRS>,
         request: ExternalRQ,
         mm_sender: Sender<InternalRQ>,
-    ) -> ExternalRS;
+    ) -> Option<ExternalRS>;
 }
