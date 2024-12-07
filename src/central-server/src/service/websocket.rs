@@ -43,53 +43,26 @@ pub struct WebSocketState {
 impl WebSocketState {}
 
 pub struct WebSocketHandler {
-    pub url: String,
-    pub port: String,
     state: Arc<Mutex<WebSocketState>>,
 }
 #[async_trait]
-pub trait WebsocketHandlerTrait<SocketState, ConnectionState, RQ, RS> {
-    // TODO: rename after refactor
-    async fn listen(
-        &mut self,
-        shutdown_receiver: &mut broadcast::Receiver<()>,
-        mm_sender: Sender<RQ>,
-    );
-    async fn handle_connection(
-        state: Arc<Mutex<SocketState>>,
-        stream: TcpStream,
-        address: SocketAddr,
-        mm_sender: Sender<RQ>,
-    );
-
-    async fn poll_pushed_messages(
-        state: Arc<Mutex<WebSocketState>>,
-        connection_id: Option<UserId>,
-    ) -> Option<SocketResponse>;
-
-    async fn handle_socket_message(
-        message: Option<Result<Message, tungstenite::Error>>,
-        state: Arc<Mutex<WebSocketState>>,
-        mm_sender: Sender<MatchmakingRequest>,
-    ) -> Result<SocketResponse, &'static str>;
-
-    async fn handle_client_request(
-        connection: &Connection,
-        request: ClientRequest,
-        mm_sender: Sender<MatchmakingRequest>,
-    ) -> ClientResponse;
-}
-
-#[async_trait]
-impl WebsocketHandlerTrait<WebSocketState, Connection, MatchmakingRequest, MatchmakingResponse>
-    for WebSocketHandler
+pub trait WebsocketHandlerTrait<
+    SocketState,
+    ConnectionState,
+    ExternalRQ,
+    ExternalRS,
+    InternalRQ: Send + 'static,
+    InternalQS,
+>
 {
+    // TODO: rename after refactor
+    fn get_state(&self) -> Arc<Mutex<SocketState>>;
     async fn listen(
         &mut self,
+        address: String,
         shutdown_receiver: &mut broadcast::Receiver<()>,
-        mm_sender: Sender<MatchmakingRequest>,
+        mm_sender: Sender<InternalRQ>,
     ) {
-        let address = self.format_address();
         let ws_listener = TcpListener::bind(address.clone())
             .await
             .unwrap_or_else(|e| {
@@ -104,8 +77,8 @@ impl WebsocketHandlerTrait<WebSocketState, Connection, MatchmakingRequest, Match
                             error!("Failed to accept connection from {} with error: {}", address, e);
                         }
                         Ok((stream, address)) => {
-                            tokio::spawn(WebSocketHandler::handle_connection(
-                                self.state.clone(),
+                            tokio::spawn(Self::handle_connection(
+                                self.get_state(),
                                 stream,
                                 address,
                                 mm_sender.clone(),
@@ -120,7 +93,45 @@ impl WebsocketHandlerTrait<WebSocketState, Connection, MatchmakingRequest, Match
         }
         info!("Exited ws listener");
     }
+    async fn handle_connection(
+        state: Arc<Mutex<SocketState>>,
+        stream: TcpStream,
+        address: SocketAddr,
+        mm_sender: Sender<InternalRQ>,
+    );
 
+    async fn poll_pushed_messages(
+        state: Arc<Mutex<WebSocketState>>,
+        connection_id: Option<UserId>,
+    ) -> Option<SocketResponse<ExternalRS>>;
+
+    async fn handle_socket_message(
+        message: Option<Result<Message, tungstenite::Error>>,
+        state: Arc<Mutex<WebSocketState>>,
+        mm_sender: Sender<MatchmakingRequest>,
+    ) -> Result<SocketResponse<ExternalRS>, &'static str>;
+
+    async fn handle_client_request(
+        connection: &Connection,
+        request: ClientRequest,
+        mm_sender: Sender<MatchmakingRequest>,
+    ) -> ClientResponse;
+}
+
+#[async_trait]
+impl
+    WebsocketHandlerTrait<
+        WebSocketState,
+        Connection,
+        ClientRequest,
+        ClientResponse,
+        MatchmakingRequest,
+        MatchmakingResponse,
+    > for WebSocketHandler
+{
+    fn get_state(&self) -> Arc<Mutex<WebSocketState>> {
+        self.state.clone()
+    }
     async fn handle_connection(
         state: Arc<Mutex<WebSocketState>>,
         stream: TcpStream,
@@ -179,7 +190,7 @@ impl WebsocketHandlerTrait<WebSocketState, Connection, MatchmakingRequest, Match
     async fn poll_pushed_messages(
         state: Arc<Mutex<WebSocketState>>,
         connection_id: Option<UserId>,
-    ) -> Option<SocketResponse> {
+    ) -> Option<SocketResponse<ClientResponse>> {
         let Some(connection_id) = connection_id else {
             warn!("Cannot poll connection w/o connection_id");
             return None;
@@ -213,7 +224,7 @@ impl WebsocketHandlerTrait<WebSocketState, Connection, MatchmakingRequest, Match
         message: Option<Result<Message, tungstenite::Error>>,
         state: Arc<Mutex<WebSocketState>>,
         mm_sender: Sender<MatchmakingRequest>,
-    ) -> Result<SocketResponse, &'static str> {
+    ) -> Result<SocketResponse<ClientResponse>, &'static str> {
         let msg = match message {
             None => {
                 debug!("Websocket closed");
@@ -291,16 +302,11 @@ impl WebsocketHandlerTrait<WebSocketState, Connection, MatchmakingRequest, Match
     }
 }
 impl WebSocketHandler {
-    pub fn new(url: String, port: String) -> Self {
+    pub fn new() -> Self {
         Self {
-            url,
-            port,
             state: Arc::new(Mutex::new(WebSocketState {
                 user_handles: HashMap::new(),
             })),
         }
-    }
-    fn format_address(&self) -> String {
-        format!("{}:{}", self.url, self.port)
     }
 }

@@ -34,8 +34,12 @@ async fn main() {
             .await;
     });
     let websocket_handle: JoinHandle<()> = tokio::spawn(async move {
-        WebSocketHandler::new("0.0.0.0".to_owned(), "3001".to_owned())
-            .listen(&mut ws_shutdown_receiver, to_mm_channel.sender)
+        WebSocketHandler::new()
+            .listen(
+                "0.0.0.0:3001".to_owned(),
+                &mut ws_shutdown_receiver,
+                to_mm_channel.sender,
+            )
             .await;
     });
 

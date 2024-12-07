@@ -63,9 +63,9 @@ pub struct SocketRequest {
 
 #[derive(Serialize, Clone)]
 #[serde(tag = "type")]
-pub struct SocketResponse {
+pub struct SocketResponse<T> {
     pub user_id: UserId, // TODO: in here?
-    pub message: ClientResponse,
+    pub message: T,
 }
 
 // API messages
