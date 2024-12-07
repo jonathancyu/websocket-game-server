@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { MatchmakingResponse } from "./shared/responses";
 import Game from "./game";
 import Queue from "./queue";

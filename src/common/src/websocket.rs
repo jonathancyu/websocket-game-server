@@ -12,7 +12,13 @@ use tokio::{
     },
     time,
 };
-use tokio_tungstenite::{accept_async, tungstenite::Message};
+use tokio_tungstenite::{
+    accept_async,
+    tungstenite::{
+        protocol::{frame::coding::CloseCode, CloseFrame},
+        Message,
+    },
+};
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
@@ -142,15 +148,17 @@ where
         debug!("Listening to {:?}", user_id.clone());
         let mut interval = time::interval(Duration::from_secs(1));
         loop {
-            debug!("Listening loop");
+            let mut close_socket = false;
             tokio::select! {
                 // Poll connection for any push messages
                 _ = interval.tick() => {
-                    debug!("poll");
                     let response = Self::handle_internal_message(connection.clone()).await;
                     if let Some(response) = response {
-                        let response = serde_json::to_string(&response).expect("Could not serialize response.");
-                        ws_sender.send(Message::Text(response)).await.unwrap();
+                        let response_body = serde_json::to_string(&response).expect("Could not serialize response.");
+                        ws_sender.send(Message::Text(response_body)).await.unwrap();
+
+                        // Drop connection according to criteria
+                        close_socket |= Self::drop_after_send(response.message);
                     }
                 }
 
@@ -169,18 +177,27 @@ where
                         mm_sender.clone()
                     ).await;
 
-                    match result  {
-                        Ok(response) => {
-                            if let Some(response) = response {
-                                let response = serde_json::to_string(&response).expect("Could not serialize response.");
-                                ws_sender.send(Message::Text(response)).await.unwrap();
-                            } else {
-                                debug!("decided to not respond uwu")
-                            }
-                        },
-                        Err(_) => break,
+                    let Ok(response) = result else {
+                        break
                     };
+
+                    if let Some(response) = response {
+                        let response_body = serde_json::to_string(&response).expect("Could not serialize response.");
+                        ws_sender.send(Message::Text(response_body)).await.unwrap();
+
+                        // Drop connection according to criteria
+                        close_socket |= Self::drop_after_send(response.message);
+                    }
                 }
+            };
+            if close_socket {
+                ws_sender
+                    .send(Message::Close(Some(CloseFrame {
+                        code: CloseCode::Normal,
+                        reason: "Decided to close after sending the previous message".into(),
+                    })))
+                    .await
+                    .expect("Failed to close socket");
             }
         }
     }
@@ -207,6 +224,11 @@ where
             user_id: connection.user_id,
             message: response,
         }))
+    }
+
+    // Criterion to drop connection. By default, always keep the connection alive.
+    fn drop_after_send(_response: ExternalRS) -> bool {
+        false
     }
 
     // Read internal message to potentially push a message back to the user.

@@ -69,6 +69,16 @@ impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest, Matchma
             }),
         }
     }
+
+    fn drop_after_send(response: ClientResponse) -> bool {
+        matches!(
+            response,
+            ClientResponse::MatchFound {
+                game_id: _,
+                server_address: _,
+            } | ClientResponse::JoinServer { server_ip: _ }
+        )
+    }
 }
 
 impl QueueSocket {
