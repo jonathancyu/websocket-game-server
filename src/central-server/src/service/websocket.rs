@@ -108,14 +108,14 @@ pub trait WebsocketHandlerTrait<
     async fn handle_socket_message(
         message: Option<Result<Message, tungstenite::Error>>,
         state: Arc<Mutex<WebSocketState>>,
-        mm_sender: Sender<MatchmakingRequest>,
+        mm_sender: Sender<InternalRQ>,
     ) -> Result<SocketResponse<ExternalRS>, &'static str>;
 
     async fn handle_client_request(
         connection: &Connection,
         request: ClientRequest,
-        mm_sender: Sender<MatchmakingRequest>,
-    ) -> ClientResponse;
+        mm_sender: Sender<InternalRQ>,
+    ) -> ExternalRS;
 }
 
 #[async_trait]
