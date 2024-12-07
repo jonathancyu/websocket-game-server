@@ -5,6 +5,7 @@ use std::{
     time::Duration,
 };
 
+use axum::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -46,20 +47,40 @@ pub struct WebSocketHandler {
     pub port: String,
     state: Arc<Mutex<WebSocketState>>,
 }
+#[async_trait]
 pub trait WebsocketHandlerTrait<SocketState, ConnectionState, RQ, RS> {
     // TODO: rename after refactor
-    fn listen(
+    async fn listen(
         &mut self,
         shutdown_receiver: &mut broadcast::Receiver<()>,
         mm_sender: Sender<RQ>,
-    ) -> impl std::future::Future<Output = ()> + Send;
-    fn handle_connection(
+    );
+    async fn handle_connection(
         state: Arc<Mutex<SocketState>>,
         stream: TcpStream,
         address: SocketAddr,
         mm_sender: Sender<RQ>,
-    ) -> impl std::future::Future<Output = ()> + Send;
+    );
+
+    async fn poll_pushed_messages(
+        state: Arc<Mutex<WebSocketState>>,
+        connection_id: Option<UserId>,
+    ) -> Option<SocketResponse>;
+
+    async fn handle_socket_message(
+        message: Option<Result<Message, tungstenite::Error>>,
+        state: Arc<Mutex<WebSocketState>>,
+        mm_sender: Sender<MatchmakingRequest>,
+    ) -> Result<SocketResponse, &'static str>;
+
+    async fn handle_client_request(
+        connection: &Connection,
+        request: ClientRequest,
+        mm_sender: Sender<MatchmakingRequest>,
+    ) -> ClientResponse;
 }
+
+#[async_trait]
 impl WebsocketHandlerTrait<WebSocketState, Connection, MatchmakingRequest, MatchmakingResponse>
     for WebSocketHandler
 {
@@ -152,20 +173,6 @@ impl WebsocketHandlerTrait<WebSocketState, Connection, MatchmakingRequest, Match
                 }
             }
         }
-    }
-}
-impl WebSocketHandler {
-    pub fn new(url: String, port: String) -> Self {
-        Self {
-            url,
-            port,
-            state: Arc::new(Mutex::new(WebSocketState {
-                user_handles: HashMap::new(),
-            })),
-        }
-    }
-    fn format_address(&self) -> String {
-        format!("{}:{}", self.url, self.port)
     }
 
     // TODO: Should just pass in the connection since it's cloneable.
@@ -281,5 +288,19 @@ impl WebSocketHandler {
                 server_ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
             },
         }
+    }
+}
+impl WebSocketHandler {
+    pub fn new(url: String, port: String) -> Self {
+        Self {
+            url,
+            port,
+            state: Arc::new(Mutex::new(WebSocketState {
+                user_handles: HashMap::new(),
+            })),
+        }
+    }
+    fn format_address(&self) -> String {
+        format!("{}:{}", self.url, self.port)
     }
 }
