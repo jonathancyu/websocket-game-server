@@ -3,10 +3,11 @@ use std::{
     sync::Arc,
 };
 
+use common::model::messages::UserId;
 use tokio::sync::{broadcast, mpsc::Receiver, Mutex};
 use tracing::{debug, error, info, warn};
 
-use crate::model::messages::{Game, MatchmakingRequest, MatchmakingResponse, Player, UserId};
+use crate::model::messages::{Game, MatchmakingRequest, MatchmakingResponse, Player};
 
 pub struct MatchmakingService {
     queue: VecDeque<Player>,

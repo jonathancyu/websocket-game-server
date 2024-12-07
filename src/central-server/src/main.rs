@@ -1,6 +1,8 @@
-use server::service::websocket::WebsocketHandlerTrait;
-use server::service::{matchmaking::MatchmakingService, websocket::WebSocketHandler};
-use server::utility::channel::Channel;
+use common::utility::Channel;
+use common::websocket::WebsocketHandler;
+use server::service::{
+    matchmaking::MatchmakingService, websocket::WebSocketHandler as MatchmakingWebSocket,
+};
 use tokio::sync::broadcast;
 use tokio::{sync::mpsc, task::JoinHandle};
 
@@ -34,7 +36,7 @@ async fn main() {
             .await;
     });
     let websocket_handle: JoinHandle<()> = tokio::spawn(async move {
-        WebSocketHandler::new()
+        MatchmakingWebSocket::new()
             .listen(
                 "0.0.0.0:3001".to_owned(),
                 &mut ws_shutdown_receiver,
