@@ -142,11 +142,12 @@ where
         debug!("Listening to {:?}", user_id.clone());
         let mut interval = time::interval(Duration::from_secs(1));
         loop {
+            debug!("Listening loop");
             tokio::select! {
                 // Poll connection for any push messages
                 _ = interval.tick() => {
-                    let response = Self::handle_internal_message(connection.clone()).await;
                     debug!("poll");
+                    let response = Self::handle_internal_message(connection.clone()).await;
                     if let Some(response) = response {
                         let response = serde_json::to_string(&response).expect("Could not serialize response.");
                         ws_sender.send(Message::Text(response)).await.unwrap();

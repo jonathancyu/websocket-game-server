@@ -47,7 +47,6 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
 
     newSocket.onerror = (event: Event) => {
       console.log("Error: ", event);
-      // TODO: Retry logic?
       setConnectionStatus(ConnectionStatus.Failed);
     };
 
@@ -62,6 +61,16 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
     // Fires when socket is closed by SERVER
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     newSocket.onclose = (event: CloseEvent) => {
+      // Normal closure
+      if (event.code === 1000 && event.wasClean) {
+        setConnectionStatus(ConnectionStatus.Off);
+        return;
+      }
+      console.log("Socket closed with event, retrying.");
+      console.log(event.code);
+      console.log(event.wasClean);
+      console.log(event.reason);
+
       // Try to reconnect
       setTimeout(() => {
         connectWebSocket(url, onmessage);
@@ -81,8 +90,7 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
     },
     close: () => {
       if (socket) {
-        setConnectionStatus(ConnectionStatus.Off);
-        socket.close();
+        socket.close(1000, "User closed socket");
       }
     },
   };

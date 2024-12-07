@@ -28,19 +28,23 @@ impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest, Matchma
         connection: Connection<MatchmakingResponse>,
     ) -> Option<SocketResponse<ClientResponse>> {
         // See if MM sent any messages
-        let message = connection.to_socket.receiver.lock().await.recv().await?;
+        let mut receiver = connection.to_socket.receiver.lock().await;
 
         // If message was sent, forward to user
-        Some(SocketResponse {
-            user_id: connection.user_id,
-            message: match message {
-                MatchmakingResponse::QueueJoined => ClientResponse::JoinedQueue,
-                MatchmakingResponse::MatchFound(game) => ClientResponse::MatchFound {
-                    game_id: game.id,
-                    server_address: game.server_address,
+        match receiver.try_recv() {
+            Ok(message) => Some(SocketResponse {
+                user_id: connection.user_id,
+                message: match message {
+                    MatchmakingResponse::QueueJoined => ClientResponse::JoinedQueue,
+                    MatchmakingResponse::MatchFound(game) => ClientResponse::MatchFound {
+                        game_id: game.id,
+                        server_address: game.server_address,
+                    },
                 },
-            },
-        })
+            }),
+
+            Err(_) => None,
+        }
     }
 
     async fn respond_to_request(
