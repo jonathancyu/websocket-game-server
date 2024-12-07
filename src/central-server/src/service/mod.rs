@@ -1,2 +1,2 @@
 pub mod matchmaking;
-pub mod websocket;
+pub mod queue_socket;

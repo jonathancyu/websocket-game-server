@@ -14,13 +14,13 @@ use crate::model::messages::{
     ClientRequest, ClientResponse, MatchmakingRequest, MatchmakingResponse, Player,
 };
 
-pub struct WebSocketHandler {
+pub struct QueueSocket {
     state: Arc<Mutex<WebSocketState<MatchmakingResponse>>>,
 }
 
 #[async_trait]
 impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest, MatchmakingResponse>
-    for WebSocketHandler
+    for QueueSocket
 {
     fn get_state(&self) -> Arc<Mutex<WebSocketState<MatchmakingResponse>>> {
         self.state.clone()
@@ -68,7 +68,7 @@ impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest, Matchma
         debug!("Got message {:?}", &message);
         Ok(SocketResponse {
             user_id,
-            message: WebSocketHandler::respond_to_request(connection, request.request, mm_sender)
+            message: QueueSocket::respond_to_request(connection, request.request, mm_sender)
                 .await,
         })
     }
@@ -95,7 +95,7 @@ impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest, Matchma
     }
 }
 
-impl WebSocketHandler {
+impl QueueSocket {
     pub fn new() -> Self {
         Self {
             state: Arc::new(Mutex::new(WebSocketState::new())),
@@ -103,7 +103,7 @@ impl WebSocketHandler {
     }
 }
 
-impl Default for WebSocketHandler {
+impl Default for QueueSocket {
     fn default() -> Self {
         Self::new()
     }
