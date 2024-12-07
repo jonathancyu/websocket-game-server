@@ -77,7 +77,7 @@ pub trait WebsocketHandlerTrait<
                             error!("Failed to accept connection from {} with error: {}", address, e);
                         }
                         Ok((stream, address)) => {
-                            tokio::spawn(Self::handle_connection(
+                            tokio::spawn(Self::listen_to_connection(
                                 self.get_state(),
                                 stream,
                                 address,
@@ -93,25 +93,26 @@ pub trait WebsocketHandlerTrait<
         }
         info!("Exited ws listener");
     }
-    async fn handle_connection(
+    async fn listen_to_connection(
         state: Arc<Mutex<SocketState>>,
         stream: TcpStream,
         address: SocketAddr,
         mm_sender: Sender<InternalRQ>,
     );
 
-    async fn poll_pushed_messages(
+    async fn handle_internal_message(
         state: Arc<Mutex<WebSocketState>>,
         connection_id: Option<UserId>,
     ) -> Option<SocketResponse<ExternalRS>>;
 
-    async fn handle_socket_message(
+    async fn handle_external_message(
         message: Option<Result<Message, tungstenite::Error>>,
         state: Arc<Mutex<WebSocketState>>,
         mm_sender: Sender<InternalRQ>,
     ) -> Result<SocketResponse<ExternalRS>, &'static str>;
 
-    async fn handle_client_request(
+    // Logic to handle a client's request
+    async fn respond_to_request(
         connection: &Connection,
         request: ClientRequest,
         mm_sender: Sender<InternalRQ>,
@@ -132,7 +133,8 @@ impl
     fn get_state(&self) -> Arc<Mutex<WebSocketState>> {
         self.state.clone()
     }
-    async fn handle_connection(
+
+    async fn listen_to_connection(
         state: Arc<Mutex<WebSocketState>>,
         stream: TcpStream,
         address: SocketAddr,
@@ -151,15 +153,16 @@ impl
             tokio::select! {
                 // Poll connection for any push messages
                 _ = interval.tick() => {
-                    let response = WebSocketHandler::poll_pushed_messages(state.clone(), connection_id.clone()).await;
+                    let response = WebSocketHandler::handle_internal_message(state.clone(), connection_id.clone()).await;
                     if let Some(response) = response {
                         let response = serde_json::to_string(&response).expect("Could not serialize response.");
                         ws_sender.send(Message::Text(response)).await.unwrap();
                     }
                 }
+
                 // Otherwise, handle incoming messages
                 msg = ws_receiver.next() => {
-                    let result = WebSocketHandler::handle_socket_message(
+                    let result = WebSocketHandler::handle_external_message(
                         msg,
                         state.clone(),
                         mm_sender.clone()
@@ -186,7 +189,7 @@ impl
     }
 
     // TODO: Should just pass in the connection since it's cloneable.
-    async fn poll_pushed_messages(
+    async fn handle_internal_message(
         state: Arc<Mutex<WebSocketState>>,
         connection_id: Option<UserId>,
     ) -> Option<SocketResponse<ClientResponse>> {
@@ -219,7 +222,7 @@ impl
         })
     }
 
-    async fn handle_socket_message(
+    async fn handle_external_message(
         message: Option<Result<Message, tungstenite::Error>>,
         state: Arc<Mutex<WebSocketState>>,
         mm_sender: Sender<MatchmakingRequest>,
@@ -270,16 +273,12 @@ impl
 
         Ok(SocketResponse {
             user_id,
-            message: WebSocketHandler::handle_client_request(
-                &connection,
-                request.request,
-                mm_sender,
-            )
-            .await,
+            message: WebSocketHandler::respond_to_request(&connection, request.request, mm_sender)
+                .await,
         })
     }
 
-    async fn handle_client_request(
+    async fn respond_to_request(
         connection: &Connection,
         request: ClientRequest,
         mm_sender: Sender<MatchmakingRequest>,
