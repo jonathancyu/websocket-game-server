@@ -17,11 +17,8 @@ use tokio::{
     },
     time,
 };
-use tokio_tungstenite::{
-    accept_async,
-    tungstenite::{self, Message},
-};
-use tracing::{debug, error, info, warn};
+use tokio_tungstenite::{accept_async, tungstenite::Message};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use crate::{
@@ -143,6 +140,12 @@ where
 
                 // Otherwise, handle incoming messages
                 msg = ws_receiver.next() => {
+                    let Some(msg) = msg else {
+                        debug!("WS received empty message, TODO"); // TODO: what to do
+                        break;
+                    };
+                    let msg = msg.expect("Couldn't unwrap message");
+
                     let result = Self::handle_external_message(
                         connection.clone(),
                         msg,
@@ -169,7 +172,7 @@ where
     // Read message from connection, return immediate response
     async fn handle_external_message(
         connection: Connection<InternalRS>,
-        message: Option<Result<Message, tungstenite::Error>>,
+        message: Message,
         mm_sender: Sender<InternalRQ>,
     ) -> Result<SocketResponse<ExternalRS>, &'static str>;
 
@@ -195,7 +198,6 @@ impl
         self.state.clone()
     }
 
-    // TODO: Should just pass in the connection since it's cloneable.
     async fn handle_internal_message(
         connection: Connection<MatchmakingResponse>,
     ) -> Option<SocketResponse<ClientResponse>> {
@@ -217,30 +219,15 @@ impl
 
     async fn handle_external_message(
         connection: Connection<MatchmakingResponse>,
-        message: Option<Result<Message, tungstenite::Error>>,
+        message: Message,
         mm_sender: Sender<MatchmakingRequest>,
     ) -> Result<SocketResponse<ClientResponse>, &'static str> {
-        let msg = match message {
-            None => {
-                debug!("Websocket closed");
-                // TODO: Likely should be handled on the matchmaking end
-
-                // mm_sender
-                //     .send(MatchmakingRequest::Disconnected(connection.user_id.clone()))
-                //     .await
-                //     .expect("Failed to send leave queue");
-                return Err("Websocket closed");
-            }
-            Some(msg) => msg,
-        }
-        .expect("Couldn't unwrap msg");
-
-        if !msg.is_text() {
+        if !message.is_text() {
             return Err("Got non-text message :(");
         }
 
         // Deserialize request
-        let body = msg.to_text().unwrap();
+        let body = message.to_text().unwrap();
         debug!(body);
         let request: SocketRequest =
             serde_json::from_str(body).expect("Could not deserialize request.");
@@ -250,8 +237,7 @@ impl
             None => UserId(Uuid::new_v4()),
         };
 
-        debug!("Got message {:?}", &msg);
-
+        debug!("Got message {:?}", &message);
         Ok(SocketResponse {
             user_id,
             message: WebSocketHandler::respond_to_request(connection, request.request, mm_sender)
