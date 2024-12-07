@@ -1,9 +1,4 @@
-use std::{
-    collections::HashMap,
-    net::{Ipv6Addr, SocketAddr},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
@@ -127,7 +122,7 @@ where
         let (mut ws_sender, mut ws_receiver) = stream.split();
         let mut interval = time::interval(Duration::from_secs(1));
         // TODO: handshake, then resolve connection from state
-        let mut connection_id: Option<UserId> = None;
+        let _connection_id: Option<UserId> = None;
         let user_id = UserId(Uuid::new_v4());
 
         // Lookup user's Connection by user_id
