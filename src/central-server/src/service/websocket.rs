@@ -139,7 +139,6 @@ impl
         mm_sender: Sender<MatchmakingRequest>,
     ) {
         info!("New ws connection: {}", address);
-        // TODO: implement with protobuf (prost)
         // ISSUE: We have N threads spawning instead of spawning 1 thread to read N connections
         // (but lock state the whole time)
 

@@ -88,7 +88,7 @@ pub enum ClientResponse {
         user_id: UserId,
     },
     // Ack user joining queue
-    AckJoinQueue,
+    AckJoinQueue, // TODO: remove
     // User actually joined queue
     JoinedQueue,
     // Constant ping to let user know still connected
