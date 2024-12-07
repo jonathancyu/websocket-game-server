@@ -3,7 +3,6 @@ use std::net::Ipv6Addr;
 use common::model::messages::UserId;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
-use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct Game {

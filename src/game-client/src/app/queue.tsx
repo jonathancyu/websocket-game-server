@@ -1,11 +1,10 @@
-import { Dispatch, SetStateAction, useState } from "react";
+import { useState } from "react";
 import useWebSocket, { ConnectionStatus } from "./hooks/socket";
 import { match } from "ts-pattern";
 import { MatchmakingRequest } from "./shared/requests";
 import { MatchmakingResponse } from "./shared/responses";
 
 type QueueProps = {
-  setMessages: Dispatch<SetStateAction<MatchmakingResponse[]>>;
   joinGame: (serverAddress: string) => void;
 };
 
@@ -15,9 +14,10 @@ enum QueueState {
   NotInQueue,
 }
 
-export default function Queue({ setMessages, joinGame }: QueueProps) {
+export default function Queue({ joinGame }: QueueProps) {
   const queue = useWebSocket<MatchmakingRequest, MatchmakingResponse>();
   const [queueState, setQueueState] = useState(QueueState.NotInQueue);
+  const [messages, setMessages] = useState<MatchmakingResponse[]>([]);
   function onmessage(message: MatchmakingResponse) {
     match(message)
       .with({ type: "JoinedQueue" }, ({}) => {
@@ -76,6 +76,22 @@ export default function Queue({ setMessages, joinGame }: QueueProps) {
 
   return (
     <div className="space-x-4">
+      {messages.length > 0 && (
+        <div className="bottom-2 right-2 h-48 overflow-y-auto bg-white/50 rounded-lg shadow-sm">
+          <div className="flex flex-col p-2 space-y-1">
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className="p-2 bg-black/5 backdrop-blur-sm rounded"
+              >
+                <pre className="whitespace-pre-wrap break-words text-xs">
+                  {JSON.stringify(message, null, 0)}
+                </pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {queueState == QueueState.NotInQueue && (
         <button
           className="px-6 py-2 rounded-md bg-blue-50 text-black border-2 border-blue-200 hover:bg-blue-100 transition-colors duration-200 font-medium shadow-sm"
