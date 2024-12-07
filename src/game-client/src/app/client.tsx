@@ -23,19 +23,21 @@ export default function Client({ id }: ClientProps) {
   }
 
   return (
-    <div className="m-2 space-y-4 text-black relative min-h-[200px]">
+    <div className="m-2 space-y-4 text-black min-h-[200px]">
       {messages.length > 0 && (
-        <div className="absolute top-1 right-1 w-72 flex flex-col items-end">
-          {messages.map((message, index) => (
-            <div
-              key={index}
-              className="mb-1 p-1 bg-black/5 backdrop-blur-sm rounded shadow-sm max-w-full"
-            >
-              <pre className="whitespace-pre-wrap break-words text-xs">
-                {JSON.stringify(message, null, 0)}
-              </pre>
-            </div>
-          ))}
+        <div className="bottom-2 right-2 h-48 overflow-y-auto bg-white/50 rounded-lg shadow-sm">
+          <div className="flex flex-col p-2 space-y-1">
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className="p-2 bg-black/5 backdrop-blur-sm rounded"
+              >
+                <pre className="whitespace-pre-wrap break-words text-xs">
+                  {JSON.stringify(message, null, 0)}
+                </pre>
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {state.screen == "queue" && (

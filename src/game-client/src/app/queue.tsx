@@ -19,7 +19,6 @@ export default function Queue({ setMessages, joinGame }: QueueProps) {
   const queue = useWebSocket<MatchmakingRequest, MatchmakingResponse>();
   const [queueState, setQueueState] = useState(QueueState.NotInQueue);
   function onmessage(message: MatchmakingResponse) {
-    console.log(message);
     match(message)
       .with({ type: "JoinedQueue" }, ({}) => {
         setQueueState(QueueState.InQueue);
@@ -41,9 +40,10 @@ export default function Queue({ setMessages, joinGame }: QueueProps) {
   }
 
   function leaveQueue() {
-    console.log(queue);
     if (queue) {
       queue.close();
+      setMessages([]);
+      setQueueState(QueueState.NotInQueue);
     }
   }
 

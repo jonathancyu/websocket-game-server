@@ -66,12 +66,9 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
         setConnectionStatus(ConnectionStatus.Off);
         return;
       }
-      console.log("Socket closed with event, retrying.");
-      console.log(event.code);
-      console.log(event.wasClean);
-      console.log(event.reason);
 
-      // Try to reconnect
+      // Otherwise, try to reconnect
+      // TODO: shoudld this be handled by the hook user?
       setTimeout(() => {
         connectWebSocket(url, onmessage);
       }, 5000);
