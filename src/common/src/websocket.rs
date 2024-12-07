@@ -13,7 +13,7 @@ use tokio::{
     time,
 };
 use tokio_tungstenite::{accept_async, tungstenite::Message};
-use tracing::{debug, error, info};
+use tracing::{debug, error, field::debug, info};
 use uuid::Uuid;
 
 use crate::{
@@ -126,13 +126,17 @@ where
         let user_id = UserId(Uuid::new_v4());
 
         // Lookup user's Connection by user_id
-        let connection = state
-            .lock()
-            .await
-            .user_handles
-            .entry(user_id.clone())
-            .or_insert_with(|| Connection::new(user_id, Channel::from(mpsc::channel(100))))
-            .clone();
+        let connection = {
+            // Acquire state mutex in limited scope so we don't deadlock for the lifetime of the
+            // connection
+            state
+                .lock()
+                .await
+                .user_handles
+                .entry(user_id.clone())
+                .or_insert_with(|| Connection::new(user_id, Channel::from(mpsc::channel(100))))
+                .clone()
+        };
 
         loop {
             tokio::select! {
@@ -161,8 +165,12 @@ where
 
                     match result  {
                         Ok(response) => {
-                            let response = serde_json::to_string(&response).expect("Could not serialize response.");
-                            ws_sender.send(Message::Text(response)).await.unwrap();
+                            if let Some(response) = response {
+                                let response = serde_json::to_string(&response).expect("Could not serialize response.");
+                                ws_sender.send(Message::Text(response)).await.unwrap();
+                            } else {
+                                debug!("decided to not respond uwu")
+                            }
                         },
                         Err(_) => break,
                     };
