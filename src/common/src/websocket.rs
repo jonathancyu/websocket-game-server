@@ -187,17 +187,13 @@ where
         let body = message.to_text().unwrap();
         let request: SocketRequest<ExternalRQ> =
             serde_json::from_str(body).expect("Could not deserialize request.");
-        // If client provided user_id, use it. Otherwise give them a new one.
-        let user_id = match request.user_id {
-            Some(user_id) => user_id,
-            None => UserId(Uuid::new_v4()),
-        };
 
         debug!("Got message {:?}", &message);
-        let response = Self::respond_to_request(connection, request.request, mm_sender).await;
+        let response =
+            Self::respond_to_request(connection.clone(), request.request, mm_sender).await;
 
         Ok(response.map(|response| SocketResponse {
-            user_id,
+            user_id: connection.user_id,
             message: response,
         }))
     }
