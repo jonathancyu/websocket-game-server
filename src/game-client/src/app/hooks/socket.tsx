@@ -59,13 +59,13 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
       onmessage(message.message);
     };
 
+    // Fires when socket is closed by SERVER
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     newSocket.onclose = (event: CloseEvent) => {
-      console.log(connectionStatus);
-      console.log(
-        "Closed websocket with code " + event.wasClean + ":" + event.reason,
-      );
-      setSocket(null);
-      setConnectionStatus(ConnectionStatus.Off);
+      // Try to reconnect
+      setTimeout(() => {
+        connectWebSocket(url, onmessage);
+      }, 5000);
     };
 
     setSocket(newSocket);
@@ -81,6 +81,7 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
     },
     close: () => {
       if (socket) {
+        setConnectionStatus(ConnectionStatus.Off);
         socket.close();
       }
     },

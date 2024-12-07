@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction } from "react";
+import { Dispatch, SetStateAction, useState } from "react";
 import useWebSocket, { ConnectionStatus } from "./hooks/socket";
 import { match } from "ts-pattern";
 import { MatchmakingRequest } from "./shared/requests";
@@ -9,16 +9,23 @@ type QueueProps = {
   joinGame: (serverAddress: string) => void;
 };
 
+enum QueueState {
+  InQueue,
+  Connecting,
+  NotInQueue,
+}
+
 export default function Queue({ setMessages, joinGame }: QueueProps) {
   const queue = useWebSocket<MatchmakingRequest, MatchmakingResponse>();
+  const [queueState, setQueueState] = useState(QueueState.NotInQueue);
   function onmessage(message: MatchmakingResponse) {
+    console.log(message);
     match(message)
-      .with({ type: "Connected" }, ({ userId }) => {
-        if (!userId) {
-          console.log("Got Connected without userid");
-        }
+      .with({ type: "JoinedQueue" }, ({}) => {
+        setQueueState(QueueState.InQueue);
       })
       .with({ type: "MatchFound" }, ({ server_address }) => {
+        setQueueState(QueueState.NotInQueue);
         console.log("Found address " + server_address);
         joinGame(server_address);
       })
@@ -29,10 +36,12 @@ export default function Queue({ setMessages, joinGame }: QueueProps) {
   }
 
   function joinQueue() {
+    setQueueState(QueueState.Connecting);
     queue.connect("ws://localhost:3001", onmessage);
   }
 
   function leaveQueue() {
+    console.log(queue);
     if (queue) {
       queue.close();
     }
@@ -61,11 +70,13 @@ export default function Queue({ setMessages, joinGame }: QueueProps) {
       </span>
     );
   }
+  function timer() {
+    return <>InQueue</>;
+  }
 
   return (
     <div className="space-x-4">
-      {(queue.connectionStatus == ConnectionStatus.Off ||
-        queue.connectionStatus == ConnectionStatus.Failed) && (
+      {queueState == QueueState.NotInQueue && (
         <button
           className="px-6 py-2 rounded-md bg-blue-50 text-black border-2 border-blue-200 hover:bg-blue-100 transition-colors duration-200 font-medium shadow-sm"
           onClick={joinQueue}
@@ -73,7 +84,7 @@ export default function Queue({ setMessages, joinGame }: QueueProps) {
           Join Queue
         </button>
       )}
-      {queue.connectionStatus == ConnectionStatus.Connecting && spinner()}
+      {queueState == QueueState.Connecting && spinner()}
       {queue.connectionStatus == ConnectionStatus.Failed && (
         <span className="inline-flex items-center text-red-600">
           <svg
@@ -92,13 +103,16 @@ export default function Queue({ setMessages, joinGame }: QueueProps) {
           Connection Failed
         </span>
       )}
-      {queue.connectionStatus == ConnectionStatus.Connected && (
-        <button
-          className="px-6 py-2 rounded-md bg-red-50 text-red-700 border-2 border-red-200 hover:bg-red-100 transition-colors duration-200 font-medium shadow-sm"
-          onClick={leaveQueue}
-        >
-          Exit
-        </button>
+      {queueState == QueueState.InQueue && (
+        <div className="flex flex-col items-center gap-4">
+          {timer()}
+          <button
+            className="px-6 py-2 rounded-md bg-red-50 text-red-700 border-2 border-red-200 hover:bg-red-100 transition-colors duration-200 font-medium shadow-sm"
+            onClick={leaveQueue}
+          >
+            Leave Queue
+          </button>
+        </div>
       )}
     </div>
   );
