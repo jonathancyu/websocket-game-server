@@ -1,0 +1,27 @@
+
+@startuml
+actor "User" as user
+participant "UI" as ui
+participant "Websocket Thread" as socket
+database "Mathmaking Thread" as mm
+
+user -> ui : Join queue
+ui -> socket : Connect to socket
+ui <- socket : Connected
+ui -> socket : JoinQueue
+
+socket -> mm : JoinQueue(player)
+mm -> socket : QueueJoined
+ui <- socket : QueueJoined
+
+ui -> socket : Ping
+ui <- socket : QueuePing(time_elapsed)
+
+socket <- mm : MatchFound(game)
+ui <- socket : MatchFound(game.id, game.address)
+
+
+
+
+@enduml
+
