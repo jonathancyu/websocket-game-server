@@ -2,19 +2,19 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
-pub struct UserId(pub Uuid);
+pub struct Id(pub Uuid);
 
-impl<'de> Deserialize<'de> for UserId {
+impl<'de> Deserialize<'de> for Id {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
         let uuid = Uuid::parse_str(&s).map_err(serde::de::Error::custom)?;
-        Ok(UserId(uuid))
+        Ok(Id(uuid))
     }
 }
-impl Serialize for UserId {
+impl Serialize for Id {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -26,7 +26,7 @@ impl Serialize for UserId {
 // Websocket messages
 #[derive(Deserialize)]
 pub struct SocketRequest<T> {
-    pub user_id: Option<UserId>,
+    pub user_id: Option<Id>,
     pub request: T,
 }
 
@@ -36,6 +36,6 @@ pub struct SocketResponse<T>
 where
     T: Serialize,
 {
-    pub user_id: UserId, // TODO: in here?
+    pub user_id: Id, // TODO: in here?
     pub message: T,
 }

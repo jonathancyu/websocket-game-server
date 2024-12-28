@@ -23,7 +23,7 @@ use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use crate::{
-    model::messages::{SocketRequest, SocketResponse, UserId},
+    model::messages::{Id, SocketRequest, SocketResponse},
     utility::Channel,
 };
 
@@ -32,20 +32,20 @@ pub struct Connection<RS>
 where
     RS: Clone,
 {
-    pub user_id: UserId,
+    pub user_id: Id,
     pub to_socket: Channel<RS>,
 }
 impl<RS> Connection<RS>
 where
     RS: Clone,
 {
-    pub fn new(user_id: UserId, to_socket: Channel<RS>) -> Self {
+    pub fn new(user_id: Id, to_socket: Channel<RS>) -> Self {
         Connection { user_id, to_socket }
     }
 }
 
 pub struct WebSocketState<T: Clone> {
-    user_handles: HashMap<UserId, Connection<T>>,
+    user_handles: HashMap<Id, Connection<T>>,
 }
 impl<T> WebSocketState<T>
 where
@@ -127,8 +127,8 @@ where
         let stream = accept_async(stream).await.unwrap();
         let (mut ws_sender, mut ws_receiver) = stream.split();
         // TODO: handshake, then resolve connection from state
-        let _connection_id: Option<UserId> = None;
-        let user_id = UserId(Uuid::new_v4());
+        let _connection_id: Option<Id> = None;
+        let user_id = Id(Uuid::new_v4());
 
         // Lookup user's Connection by user_id
         let connection = {

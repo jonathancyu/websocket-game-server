@@ -1,6 +1,6 @@
 use std::net::Ipv6Addr;
 
-use common::model::messages::UserId;
+use common::model::messages::Id;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 
@@ -16,7 +16,7 @@ pub struct Game {
 #[derive(Debug, Clone)]
 pub enum MatchmakingRequest {
     JoinQueue(Player),
-    LeaveQueue(UserId),
+    LeaveQueue(Id),
 }
 
 #[derive(Debug, Clone)]
@@ -28,7 +28,7 @@ pub enum MatchmakingResponse {
 // Message types for the matchmaking thread
 #[derive(Debug, Clone)]
 pub struct Player {
-    pub id: UserId,
+    pub id: Id,
     pub sender: Sender<MatchmakingResponse>,
 }
 
@@ -49,7 +49,7 @@ pub enum ClientRequest {
 pub enum ClientResponse {
     // Connected
     Connected {
-        user_id: UserId,
+        user_id: Id,
     },
     // Ack user joining queue
     AckJoinQueue, // TODO: remove

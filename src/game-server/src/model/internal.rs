@@ -1,4 +1,4 @@
-use common::model::messages::UserId;
+use common::model::messages::Id;
 use tokio::sync::mpsc::Sender;
 
 use serde::{Deserialize, Serialize};
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 // Types
 #[derive(Debug, Clone)]
 pub struct Player {
-    pub id: UserId,
+    pub id: Id,
     pub sender: Sender<GameRequest>,
 }
 
@@ -34,7 +34,7 @@ pub struct RoundResult {
 #[derive(Debug, Clone)]
 pub enum GameRequest {
     Connect(Player),
-    Move { player: UserId, value: Move },
+    Move { player: Id, value: Move },
     Disconnect(Player), // TODO: impl
 }
 

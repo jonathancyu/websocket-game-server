@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::internal::{Move, RoundResult};
 
@@ -21,4 +22,10 @@ pub enum ClientRequest {
 pub enum ClientResponse {
     RoundResult(RoundResult),
     MathResult(RoundResult),
+}
+
+// Matchmaking request/response
+#[derive(Deserialize)]
+pub struct MatchmakingRequest {
+    game_id: Uuid,
 }
