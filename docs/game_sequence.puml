@@ -1,0 +1,65 @@
+@startuml
+scale 2
+actor "Player1" as p1
+actor "Player2" as p2
+box "Game Server" #Lavender
+    participant "Game Socket" as socket
+    participant "Game Thread" as thread
+    participant "MM Listener" as mm_listener
+end box
+box "Matchmaking Server" #WhiteSmoke
+    participant "Matchmaking" as mm
+end box
+
+
+== Create game ==
+mm_listener <- mm : POST /new_game { game_id: ..., \nplayers: [player1userid, player2userid]}
+p1 -> socket : Join game
+socket -> thread : Connect player1
+thread -> thread : lookup player1 game
+socket <- thread : player1 Connected
+p1 <- socket : GameJoined
+
+p2 -> socket : Join game
+socket -> thread : Connect player2
+thread -> thread : lookup player2 game
+socket <- thread : player2 Connected
+p2 <- socket : GameJoined
+note left thread : Both players connected
+socket <- thread : GameStart
+
+== Round 1 ==
+p1 <- socket : PendingMove
+p2 <- socket : PendingMove
+p1 -> socket : Move { Rock }
+socket -> thread : Move { player1, Rock }
+p2 -> socket : Move { Paper }
+socket -> thread : Move { player2, Paper }
+socket <- thread : RoundResult { Win { Player2 } }
+p1 <- socket : RoundLoss { other: Paper }
+p2 <- socket : RoundWin { other: Rock }
+
+== Round 2 ==
+p1 <- socket : PendingMove
+p2 <- socket : PendingMove
+p1 -> socket : Move { Rock }
+socket -> thread : Move { player1, Rock }
+p2 -> socket : Move { Paper }
+socket -> thread : Move { player2, Paper }
+socket <- thread : RoundResult { Win { Player2 } }
+p1 <- socket : RoundLoss { other: Paper }
+p2 <- socket : RoundWin { other: Rock }
+note left thread : Best 2/3, p2 wins
+
+== Game Finished ==
+socket <- thread : MatchResult { Win { Player2 }}
+p1 <- socket : MatchResult { result: Loss, won: 1, total: 3 }
+p2 <- socket : MatchResult { result: Win, won: 2, total: 3 }
+thread -> mm : POST /game_result { game_id: ..., results: [ \n{user_id: player1, score: 0}, \n{user_id: player2, score: 2} ] }
+note left mm : Update elo
+
+
+
+
+@enduml
+
