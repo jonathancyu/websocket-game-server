@@ -2,5 +2,6 @@
 members = [
     "src/common",
     "src/central-server",
+    "src/game-server",
 ]
 resolver = "2"

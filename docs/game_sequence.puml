@@ -26,9 +26,10 @@ thread -> thread : lookup player2 game
 socket <- thread : player2 Connected
 p2 <- socket : GameJoined
 note left thread : Both players connected
-socket <- thread : GameStart
 
 == Round 1 ==
+socket <- thread : player1 PendingMove
+socket <- thread : player2 PendingMove
 p1 <- socket : PendingMove
 p2 <- socket : PendingMove
 p1 -> socket : Move { Rock }
@@ -40,15 +41,7 @@ p1 <- socket : RoundLoss { other: Paper }
 p2 <- socket : RoundWin { other: Rock }
 
 == Round 2 ==
-p1 <- socket : PendingMove
-p2 <- socket : PendingMove
-p1 -> socket : Move { Rock }
-socket -> thread : Move { player1, Rock }
-p2 -> socket : Move { Paper }
-socket -> thread : Move { player2, Paper }
-socket <- thread : RoundResult { Win { Player2 } }
-p1 <- socket : RoundLoss { other: Paper }
-p2 <- socket : RoundWin { other: Rock }
+note left thread : Exact same sequence as above
 note left thread : Best 2/3, p2 wins
 
 == Game Finished ==
