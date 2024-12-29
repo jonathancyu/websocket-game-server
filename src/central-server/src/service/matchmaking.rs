@@ -34,18 +34,20 @@ impl MatchmakingService {
             self.users_in_queue.remove(&player2.id);
 
             // Create game
-            let game_id = format!("Game: {:?} created", self.games.len());
+            let id = format!("Game: {:?} created", self.games.len());
+            // TODO: What happens when we scale this?
+            let address = "ws://localhost:3002".to_string();
             let game = Game {
-                id: game_id.clone(),
+                id: id.clone(),
                 player1: player1.clone(),
                 player2: player2.clone(),
-                server_address: "ws://localhost:3002".to_string(),
+                server_address: address.clone(),
             };
 
             // Notify players
             let message = ClientResponse::MatchFound {
-                game_id: game_id.clone(),
-                server_address: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).to_string(),
+                game_id: id.clone(),
+                server_address: address.clone(),
             };
             let _ = player1.sender.send(message.clone()).await;
             let _ = player2.sender.send(message.clone()).await;
