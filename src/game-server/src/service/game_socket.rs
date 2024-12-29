@@ -7,12 +7,24 @@ use crate::model::{
 use axum::async_trait;
 use common::websocket::{WebSocketState, WebsocketHandler};
 use tokio::sync::Mutex;
-pub struct GameHandler {
+pub struct GameSocket {
     state: Arc<Mutex<WebSocketState<ClientResponse>>>,
+}
+impl GameSocket {
+    pub fn new() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(WebSocketState::new())),
+        }
+    }
+}
+impl Default for GameSocket {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[async_trait]
-impl WebsocketHandler<ClientRequest, ClientResponse, GameRequest> for GameHandler {
+impl WebsocketHandler<ClientRequest, ClientResponse, GameRequest> for GameSocket {
     fn get_state(&self) -> Arc<Mutex<WebSocketState<ClientResponse>>> {
         self.state.clone()
     }
