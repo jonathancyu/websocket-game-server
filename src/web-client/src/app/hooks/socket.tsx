@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { requestFactory } from "../shared/requests";
 
 export enum ConnectionStatus {
   Off,
@@ -22,7 +21,11 @@ export type SocketHook<RQ, RS> = {
   // Fields
   connectionStatus: ConnectionStatus;
   // Methods
-  connect: (url: string, onmessage: (message: RS) => void) => void;
+  connect: (
+    url: string,
+    onOpenRequestProvider: () => RQ,
+    onMessage: (message: RS) => void,
+  ) => void;
   send: (msg: RQ) => void;
   close: () => void;
 };
@@ -34,14 +37,30 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
-  const connectWebSocket = (url: string, onmessage: (response: RS) => void) => {
+  const send = (socket: WebSocket, request: RQ) => {
+    const payload: SocketRequest<RQ> = {
+      userId,
+      request,
+    };
+    const as_string = JSON.stringify(payload);
+    socket.send(as_string);
+    console.log("Sent " + as_string);
+  };
+
+  const connectWebSocket = (
+    url: string,
+    onOpenRequestProvider: () => RQ | null,
+    onMessage: (response: RS) => void,
+  ) => {
     const newSocket = new WebSocket(url);
     setConnectionStatus(ConnectionStatus.Connecting);
 
     newSocket.onopen = () => {
-      const payload = JSON.stringify(requestFactory.joinQueue(userId));
-      console.log("Sent " + payload);
-      newSocket.send(payload);
+      const request = onOpenRequestProvider();
+      console.log(socket);
+      if (request != null) {
+        send(newSocket, request);
+      }
       setConnectionStatus(ConnectionStatus.Connected);
     };
 
@@ -55,11 +74,10 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
       if (!userId) {
         setUserId(message.userId);
       }
-      onmessage(message.message);
+      onMessage(message.message);
     };
 
     // Fires when socket is closed by SERVER
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     newSocket.onclose = (event: CloseEvent) => {
       // Normal closure
       if (event.code === 1000 && event.wasClean) {
@@ -68,9 +86,9 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
       }
 
       // Otherwise, try to reconnect
-      // TODO: shoudld this be handled by the hook user?
+      // TODO: this should be specified by the hook user
       setTimeout(() => {
-        connectWebSocket(url, onmessage);
+        connectWebSocket(url, onOpenRequestProvider, onMessage);
       }, 5000);
     };
 
@@ -81,8 +99,12 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
     connectionStatus: connectionStatus,
     connect: connectWebSocket,
     send: (msg: RQ) => {
-      if (socket) {
-        socket.send(JSON.stringify(msg));
+      if (socket != null) {
+        send(socket, msg);
+      } else {
+        console.log(
+          "Tried to send " + JSON.stringify(msg) + " but socket is null",
+        );
       }
     },
     close: () => {

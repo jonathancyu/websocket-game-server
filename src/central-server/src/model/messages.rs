@@ -29,6 +29,7 @@ pub struct Player {
 // API messages
 
 #[derive(Deserialize)]
+#[serde(tag = "type")]
 pub enum ClientRequest {
     // Add user to queue
     JoinQueue,

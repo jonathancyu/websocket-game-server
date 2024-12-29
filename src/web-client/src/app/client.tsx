@@ -2,9 +2,8 @@
 "use client";
 
 import { useState } from "react";
-import { MatchmakingResponse } from "./shared/responses";
-import Game from "./game";
-import Queue from "./queue";
+import Game from "./game/game";
+import Queue from "./queue/queue";
 
 type ClientProps = {
   id: string;

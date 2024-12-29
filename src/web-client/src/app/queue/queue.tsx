@@ -1,8 +1,8 @@
 import { useState } from "react";
-import useWebSocket, { ConnectionStatus } from "./hooks/socket";
+import useWebSocket, { ConnectionStatus } from "../hooks/socket";
 import { match } from "ts-pattern";
-import { MatchmakingRequest } from "./shared/requests";
-import { MatchmakingResponse } from "./shared/responses";
+import { MatchmakingRequest } from "./requests";
+import { MatchmakingResponse } from "./responses";
 
 type QueueProps = {
   joinGame: (serverAddress: string) => void;
@@ -36,7 +36,13 @@ export default function Queue({ joinGame }: QueueProps) {
 
   function joinQueue() {
     setQueueState(QueueState.Connecting);
-    queue.connect("ws://localhost:3001", onmessage);
+    queue.connect(
+      "ws://localhost:3001",
+      () => {
+        return { type: "JoinQueue" } as MatchmakingRequest;
+      },
+      onmessage,
+    );
   }
 
   function leaveQueue() {

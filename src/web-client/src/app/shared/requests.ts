@@ -1,21 +1,6 @@
-// Requests
-export type JoinQueue = { JoinQueue: null };
-export type Ping = { Ping: null };
-export type MatchmakingRequest = JoinQueue | Ping;
-export type SocketRequest = {
+
+export type SocketRequest<T> = {
     userId: string | null;
-    request: MatchmakingRequest;
+    request: T;
 };
 
-export const requestFactory = {
-    joinQueue: (userId: string | null) =>
-    ({
-        userId: userId,
-        request: { JoinQueue: null } satisfies JoinQueue,
-    }),
-    ping: (userId: string) =>
-    ({
-        userId: userId,
-        request: { Ping: null }
-    }),
-};

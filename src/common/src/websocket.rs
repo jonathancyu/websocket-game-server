@@ -115,7 +115,6 @@ where
     }
 
     // Thread to handle connection lifetime
-    // TODO: InternalRS is potentially redundant, as we ALWAYS just forward it.
     async fn connection_thread(
         state: Arc<Mutex<WebSocketState<ExternalRS>>>,
         stream: TcpStream,

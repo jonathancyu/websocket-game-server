@@ -1,17 +1,8 @@
 "use client";
 import { useEffect } from "react";
-import useWebSocket, { ConnectionStatus } from "./hooks/socket";
-
-export enum Move {
-  Rock = "rock",
-  Paper = "paper",
-  Scissors = "scissors",
-}
-
-export type MakeMove = { move: Move };
-export type GameRequest = MakeMove;
-// Responses
-export type GameResponse = MakeMove;
+import useWebSocket, { ConnectionStatus } from "../hooks/socket";
+import { GameRequest, GameResponse } from "./requests";
+import { Move } from "./model";
 
 // Component
 export type GameComponentProps = {
@@ -22,12 +13,16 @@ export default function Game({ serverAddress }: GameComponentProps) {
   const socket = useWebSocket<GameRequest, GameResponse>();
   useEffect(() => {
     if (socket.connectionStatus == ConnectionStatus.Off) {
-      socket.connect(serverAddress, console.log);
+      socket.connect(
+        serverAddress,
+        () => ({ type: "JoinGame" }) as GameRequest,
+        console.log,
+      );
     }
   }, [socket, serverAddress]);
 
   const handleMove = (move: Move) => {
-    socket.send({ move });
+    socket.send({ type: "Move", move });
   };
 
   return (
