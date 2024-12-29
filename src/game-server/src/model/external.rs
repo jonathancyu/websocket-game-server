@@ -1,14 +1,6 @@
-use common::model::messages::Id;
 use serde::{Deserialize, Serialize};
 
-use super::internal::{Move, RoundResult};
-
-#[derive(Serialize, Debug, Clone)]
-enum Result {
-    Win,
-    Loss,
-    Draw,
-}
+use super::internal::{Move, Result, RoundResult};
 
 // Client types
 #[derive(Deserialize)]
@@ -20,18 +12,8 @@ pub enum ClientRequest {
 #[derive(Serialize, Clone)]
 #[serde(tag = "type")]
 pub enum ClientResponse {
+    GameJoined,
+    PendingMove,
     RoundResult(RoundResult),
-    MathResult(RoundResult),
-}
-
-// Matchmaking request/response
-#[derive(Deserialize)]
-pub struct CreateGameRequest {
-    game_id: Id,
-    players: Vec<Id>,
-}
-
-#[derive(Serialize)]
-pub struct CreateGameResponse {
-    game_id: Id,
+    MatchResult { result: Result, wins: u8, total: u8 },
 }

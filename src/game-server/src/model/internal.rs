@@ -11,7 +11,7 @@ pub struct Player {
 }
 
 #[derive(Serialize, Debug, Clone)]
-enum Result {
+pub enum Result {
     Win,
     Loss,
     Draw,
@@ -43,5 +43,5 @@ pub enum GameResponse {
     Connected,
     PendingMove,
     RoundResult(RoundResult),
-    MatchResult { result: Result },
+    MatchResult { result: Result, wins: u8, total: u8 },
 }

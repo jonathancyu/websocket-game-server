@@ -40,3 +40,15 @@ where
     pub user_id: Id, // TODO: in here?
     pub message: T,
 }
+
+// Matchmaking <-> Game server interface
+#[derive(Deserialize)]
+pub struct CreateGameRequest {
+    game_id: Id,
+    players: Vec<Id>,
+}
+
+#[derive(Serialize)]
+pub struct CreateGameResponse {
+    game_id: Id,
+}
