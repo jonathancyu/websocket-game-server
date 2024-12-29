@@ -1,5 +1,5 @@
+use common::model::messages::Id;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use super::internal::{Move, RoundResult};
 
@@ -26,6 +26,12 @@ pub enum ClientResponse {
 
 // Matchmaking request/response
 #[derive(Deserialize)]
-pub struct MatchmakingRequest {
-    game_id: Uuid,
+pub struct CreateGameRequest {
+    game_id: Id,
+    players: Vec<Id>,
+}
+
+#[derive(Serialize)]
+pub struct CreateGameResponse {
+    game_id: Id,
 }
