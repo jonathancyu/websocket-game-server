@@ -7,10 +7,24 @@ import { Move } from "./model";
 // Component
 export type GameComponentProps = {
   serverAddress: string;
+  endGameAction: () => void;
 };
 
-export default function Game({ serverAddress }: GameComponentProps) {
+export type GameState =
+  | { type: "Connecting" }
+  | { type: "AnimatingConnected" }
+  | { type: "PendingMove" }
+  | { type: "AnimatingRoundResult" }
+  | { type: "AnimatingMatchResult" };
+
+export default function Game({
+  serverAddress,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  endGameAction,
+}: GameComponentProps) {
   const socket = useWebSocket<GameRequest, GameResponse>();
+
+  // Create socket
   useEffect(() => {
     const onOpenRequestProvider: () => GameRequest = () => ({
       type: "JoinGame",
@@ -20,7 +34,7 @@ export default function Game({ serverAddress }: GameComponentProps) {
     }
   }, [socket, serverAddress]);
 
-  const handleMove = (move: Move) => {
+  const makeMove = (move: Move) => {
     socket.send({ type: "Move", move });
   };
 
@@ -30,7 +44,7 @@ export default function Game({ serverAddress }: GameComponentProps) {
       {Object.values(Move).map((move) => (
         <button
           key={move}
-          onClick={() => handleMove(move)}
+          onClick={() => makeMove(move)}
           className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
         >
           {move.charAt(0).toUpperCase() + move.slice(1)}
