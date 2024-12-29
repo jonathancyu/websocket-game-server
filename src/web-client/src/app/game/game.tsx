@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import useWebSocket, { ConnectionStatus } from "../hooks/socket";
 import { GameRequest, GameResponse } from "./requests";
-import { Move } from "./model";
+import { Move, Result } from "./model";
+import { match } from "ts-pattern";
 
 // Component
 export type GameComponentProps = {
@@ -14,32 +16,76 @@ export type GameState =
   | { type: "Connecting" }
   | { type: "AnimatingConnected" }
   | { type: "PendingMove" }
-  | { type: "AnimatingRoundResult" }
-  | { type: "AnimatingMatchResult" };
+  | { type: "MoveSent" }
+  | { type: "AnimatingRoundResult"; result: Result; other_move: Move }
+  | {
+      type: "AnimatingMatchResult";
+      result: Result;
+      wins: number;
+      total: number;
+    };
 
 export default function Game({
   serverAddress,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   endGameAction,
 }: GameComponentProps) {
   const socket = useWebSocket<GameRequest, GameResponse>();
+  const [gameState, setGameState] = useState<GameState>({ type: "Connecting" });
 
   // Create socket
   useEffect(() => {
     const onOpenRequestProvider: () => GameRequest = () => ({
       type: "JoinGame",
     });
+    const stateStack: GameState[] = [];
+
+    // Message handler
+    const messageHandler = (message: GameResponse) => {
+      match(message)
+        .with({ type: "GameJoined" }, () => {
+          if (gameState.type != "Connecting") {
+            console.log("Warning: Got JoinGame when not connecting");
+          }
+          setGameState({ type: "AnimatingConnected" });
+        })
+        .with({ type: "PendingMove" }, (msg) => {
+          stateStack.push(msg as GameState);
+        })
+        .with({ type: "RoundResult" }, ({ result, other_move }) => {
+          stateStack.push({
+            type: "AnimatingRoundResult",
+            result,
+            other_move,
+          });
+        })
+        .with({ type: "MatchResult" }, ({ result, wins, total }) => {
+          stateStack.push({
+            type: "AnimatingMatchResult",
+            result,
+            wins,
+            total,
+          });
+        })
+        .otherwise((val) => console.log("TODO: " + val));
+    };
     if (socket.connectionStatus == ConnectionStatus.Off) {
-      socket.connect(serverAddress, onOpenRequestProvider, console.log);
+      socket.connect(serverAddress, onOpenRequestProvider, messageHandler);
     }
-  }, [socket, serverAddress]);
+  }, [socket, serverAddress, gameState.type]);
 
   const makeMove = (move: Move) => {
     socket.send({ type: "Move", move });
   };
 
+  const GameStateView = () => {
+    return match(gameState).otherwise((state) => (
+      <div className="font-bold">{JSON.stringify(state)}</div>
+    ));
+  };
+
   return (
     <div className="flex gap-4 justify-center">
+      <GameStateView />
       game game game
       {Object.values(Move).map((move) => (
         <button
