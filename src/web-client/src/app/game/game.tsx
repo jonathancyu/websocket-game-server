@@ -12,12 +12,11 @@ export type GameComponentProps = {
 export default function Game({ serverAddress }: GameComponentProps) {
   const socket = useWebSocket<GameRequest, GameResponse>();
   useEffect(() => {
+    const onOpenRequestProvider: () => GameRequest = () => ({
+      type: "JoinGame",
+    });
     if (socket.connectionStatus == ConnectionStatus.Off) {
-      socket.connect(
-        serverAddress,
-        () => ({ type: "JoinGame" }) as GameRequest,
-        console.log,
-      );
+      socket.connect(serverAddress, onOpenRequestProvider, console.log);
     }
   }, [socket, serverAddress]);
 

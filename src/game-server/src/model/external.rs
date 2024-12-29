@@ -4,6 +4,7 @@ use super::internal::{Move, Result, RoundResult};
 
 // Client types
 #[derive(Deserialize)]
+#[serde(tag = "type")]
 pub enum ClientRequest {
     JoinGame,
     Move(Move),
