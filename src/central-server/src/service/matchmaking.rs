@@ -1,5 +1,6 @@
 use std::{
     collections::{HashSet, VecDeque},
+    net::Ipv6Addr,
     sync::Arc,
 };
 
@@ -7,7 +8,7 @@ use common::model::messages::Id;
 use tokio::sync::{broadcast, mpsc::Receiver, Mutex};
 use tracing::{debug, error, info, warn};
 
-use crate::model::messages::{Game, MatchmakingRequest, MatchmakingResponse, Player};
+use crate::model::messages::{ClientResponse, Game, MatchmakingRequest, Player};
 
 pub struct MatchmakingService {
     queue: VecDeque<Player>,
@@ -33,22 +34,21 @@ impl MatchmakingService {
             self.users_in_queue.remove(&player2.id);
 
             // Create game
+            let game_id = format!("Game: {:?} created", self.games.len());
             let game = Game {
-                id: format!("Game: {:?} created", self.games.len()),
+                id: game_id.clone(),
                 player1: player1.clone(),
                 player2: player2.clone(),
                 server_address: "ws://localhost:3002".to_string(),
             };
 
             // Notify players
-            let _ = player1
-                .sender
-                .send(MatchmakingResponse::MatchFound(game.clone()))
-                .await;
-            let _ = player2
-                .sender
-                .send(MatchmakingResponse::MatchFound(game.clone()))
-                .await;
+            let message = ClientResponse::MatchFound {
+                game_id: game_id.clone(),
+                server_address: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).to_string(),
+            };
+            let _ = player1.sender.send(message.clone()).await;
+            let _ = player2.sender.send(message.clone()).await;
 
             // Add game
             self.games.push(game);
@@ -115,7 +115,7 @@ impl MatchmakingService {
                     warn!("Sender {:?} is closed!", player.id);
                 }
                 let _ = self.add_user(player);
-                let result = sender.send(MatchmakingResponse::QueueJoined).await;
+                let result = sender.send(ClientResponse::JoinedQueue).await;
                 if let Err(err) = result {
                     error!("Got error when sending MatchmakingResponse: {}", err);
                 }

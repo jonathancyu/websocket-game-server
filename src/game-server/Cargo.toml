@@ -3,12 +3,9 @@ name = "game-server"
 version = "0.0.1"
 edition = "2021"
 
-[lib]
-name = "server"
-path = "src/lib.rs"
 
 [[bin]]
-name = "server"
+name = "game-server"
 path = "src/main.rs"
 
 [dependencies]

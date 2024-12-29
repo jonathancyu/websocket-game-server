@@ -1,54 +1,24 @@
 use std::{net::Ipv6Addr, sync::Arc};
 
 use axum::async_trait;
-use common::{
-    model::messages::SocketResponse,
-    websocket::{Connection, WebSocketState, WebsocketHandler},
-};
+use common::websocket::{Connection, WebSocketState, WebsocketHandler};
 use tokio::sync::{mpsc::Sender, Mutex};
 use tracing::debug;
 
-use crate::model::messages::{
-    ClientRequest, ClientResponse, MatchmakingRequest, MatchmakingResponse, Player,
-};
+use crate::model::messages::{ClientRequest, ClientResponse, MatchmakingRequest, Player};
 
 pub struct QueueSocket {
-    state: Arc<Mutex<WebSocketState<MatchmakingResponse>>>,
+    state: Arc<Mutex<WebSocketState<ClientResponse>>>,
 }
 
 #[async_trait]
-impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest, MatchmakingResponse>
-    for QueueSocket
-{
-    fn get_state(&self) -> Arc<Mutex<WebSocketState<MatchmakingResponse>>> {
+impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest> for QueueSocket {
+    fn get_state(&self) -> Arc<Mutex<WebSocketState<ClientResponse>>> {
         self.state.clone()
     }
 
-    async fn handle_internal_message(
-        connection: Connection<MatchmakingResponse>,
-    ) -> Option<SocketResponse<ClientResponse>> {
-        // See if MM sent any messages
-        let mut receiver = connection.to_socket.receiver.lock().await;
-
-        // If message was sent, forward to user
-        match receiver.try_recv() {
-            Ok(message) => Some(SocketResponse {
-                user_id: connection.user_id,
-                message: match message {
-                    MatchmakingResponse::QueueJoined => ClientResponse::JoinedQueue,
-                    MatchmakingResponse::MatchFound(game) => ClientResponse::MatchFound {
-                        game_id: game.id,
-                        server_address: game.server_address,
-                    },
-                },
-            }),
-
-            Err(_) => None,
-        }
-    }
-
     async fn respond_to_request(
-        connection: Connection<MatchmakingResponse>,
+        connection: Connection<ClientResponse>,
         request: ClientRequest,
         mm_sender: Sender<MatchmakingRequest>,
     ) -> Option<ClientResponse> {

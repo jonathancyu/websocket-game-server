@@ -19,17 +19,11 @@ pub enum MatchmakingRequest {
     LeaveQueue(Id),
 }
 
-#[derive(Debug, Clone)]
-pub enum MatchmakingResponse {
-    QueueJoined,
-    MatchFound(Game),
-}
-
 // Message types for the matchmaking thread
 #[derive(Debug, Clone)]
 pub struct Player {
     pub id: Id,
-    pub sender: Sender<MatchmakingResponse>,
+    pub sender: Sender<ClientResponse>,
 }
 
 // API messages
@@ -65,6 +59,7 @@ pub enum ClientResponse {
         server_address: String,
     },
     // Notify user to connect to server at given IP
+    // TODO: why do we need this
     JoinServer {
         server_ip: Ipv6Addr,
     },

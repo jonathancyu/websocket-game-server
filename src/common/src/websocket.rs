@@ -68,15 +68,14 @@ where
 }
 
 #[async_trait]
-pub trait WebsocketHandler<ExternalRQ, ExternalRS, InternalRQ, InternalRS>
+pub trait WebsocketHandler<ExternalRQ, ExternalRS, InternalRQ>
 where
     Self: 'static,
     ExternalRQ: for<'de> Deserialize<'de> + Send + 'static,
-    ExternalRS: Send + Serialize + 'static,
+    ExternalRS: Clone + Send + Serialize + 'static,
     InternalRQ: Clone + Send + 'static,
-    InternalRS: Clone + Send + 'static,
 {
-    fn get_state(&self) -> Arc<Mutex<WebSocketState<InternalRS>>>;
+    fn get_state(&self) -> Arc<Mutex<WebSocketState<ExternalRS>>>;
 
     async fn listen(
         &mut self,
@@ -118,7 +117,7 @@ where
     // Thread to handle connection lifetime
     // TODO: InternalRS is potentially redundant, as we ALWAYS just forward it.
     async fn connection_thread(
-        state: Arc<Mutex<WebSocketState<InternalRS>>>,
+        state: Arc<Mutex<WebSocketState<ExternalRS>>>,
         stream: TcpStream,
         address: SocketAddr,
         mm_sender: Sender<InternalRQ>,
@@ -204,7 +203,7 @@ where
     }
     // Read message from connection, return immediate response
     async fn handle_external_message(
-        connection: Connection<InternalRS>,
+        connection: Connection<ExternalRS>,
         message: Message,
         mm_sender: Sender<InternalRQ>,
     ) -> Result<Option<SocketResponse<ExternalRS>>, &'static str> {
@@ -227,19 +226,31 @@ where
         }))
     }
 
+    // Read internal message to potentially forward to the user.
+    async fn handle_internal_message(
+        connection: Connection<ExternalRS>,
+    ) -> Option<SocketResponse<ExternalRS>> {
+        // See if MM sent any messages
+        let mut receiver = connection.to_socket.receiver.lock().await;
+
+        // If message was sent, forward to user
+        match receiver.try_recv() {
+            Ok(message) => Some(SocketResponse {
+                user_id: connection.user_id,
+                message,
+            }),
+            Err(_) => None,
+        }
+    }
+
     // Criterion to drop connection. By default, always keep the connection alive.
     fn drop_after_send(_response: ExternalRS) -> bool {
         false
     }
 
-    // Read internal message to potentially push a message back to the user.
-    async fn handle_internal_message(
-        connection: Connection<InternalRS>,
-    ) -> Option<SocketResponse<ExternalRS>>;
-
     // Logic to handle a client's request
     async fn respond_to_request(
-        connection: Connection<InternalRS>,
+        connection: Connection<ExternalRS>,
         request: ExternalRQ,
         mm_sender: Sender<InternalRQ>,
     ) -> Option<ExternalRS> {
