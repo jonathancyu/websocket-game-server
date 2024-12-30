@@ -1,11 +1,11 @@
 export enum Move {
-    Rock = "rock",
-    Paper = "paper",
-    Scissors = "scissors",
+    Rock = "Rock",
+    Paper = "Paper",
+    Scissors = "Scissors",
 };
 export enum Result {
-    Win = "win",
-    Loss = "loss",
+    Win = "Win",
+    Loss = "Loss",
     Draw = "Draw"
 };
 

@@ -7,7 +7,7 @@ use super::internal::{Move, Result, RoundResult};
 #[serde(tag = "type")]
 pub enum ClientRequest {
     JoinGame,
-    Move(Move),
+    Move { r#move: Move },
 }
 
 #[derive(Serialize, Clone)]

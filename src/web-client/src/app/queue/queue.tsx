@@ -26,11 +26,10 @@ export default function Queue({ joinGame }: QueueProps) {
       })
       .with({ type: "MatchFound" }, ({ server_address }) => {
         setQueueState({ type: "NotInQueue" });
-        console.log("Found address " + server_address);
         joinGame(server_address);
       })
       .otherwise((msg) => {
-        console.log(msg);
+        console.log("Unexpected queue message: " + msg);
       });
     setMessages((previous) => [...previous, message]);
   }

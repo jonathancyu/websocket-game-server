@@ -1,10 +1,10 @@
 import { useState } from "react";
 
 export enum ConnectionStatus {
-  Off,
-  Connecting,
-  Connected,
-  Failed,
+  Off = "Off",
+  Connecting = "Connecting",
+  Connected = "Connected",
+  Failed = "Failed",
 }
 
 export type SocketRequest<T> = {
@@ -55,13 +55,14 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
     const newSocket = new WebSocket(url);
     setConnectionStatus(ConnectionStatus.Connecting);
 
+    // TODO: Why does this fire twice?
     newSocket.onopen = () => {
+      setConnectionStatus(ConnectionStatus.Connected);
       const request = onOpenRequestProvider();
-      console.log(socket);
+      console.log("ABC", url, newSocket);
       if (request != null) {
         send(newSocket, request);
       }
-      setConnectionStatus(ConnectionStatus.Connected);
     };
 
     newSocket.onerror = (event: Event) => {

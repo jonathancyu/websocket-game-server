@@ -12,7 +12,7 @@ export type GameComponentProps = {
   endGameAction: () => void;
 };
 
-export type GameState =
+type GameState =
   | { type: "Connecting" }
   | { type: "AnimatingConnected" }
   | { type: "PendingMove" }
@@ -33,14 +33,20 @@ export default function Game({
   const [gameState, setGameState] = useState<GameState>({ type: "Connecting" });
 
   // Create socket
+  let count = 0;
   useEffect(() => {
-    const onOpenRequestProvider: () => GameRequest = () => ({
-      type: "JoinGame",
-    });
+    const onOpenRequestProvider: () => GameRequest = () => {
+      console.log("AA -" + socket.connectionStatus + " - " + count);
+      count += 1;
+      return {
+        type: "JoinGame",
+      };
+    };
     const stateStack: GameState[] = [];
 
     // Message handler
     const messageHandler = (message: GameResponse) => {
+      console.log("Got " + JSON.stringify(message));
       match(message)
         .with({ type: "GameJoined" }, () => {
           if (gameState.type != "Connecting") {
@@ -84,18 +90,19 @@ export default function Game({
   };
 
   return (
-    <div className="flex gap-4 justify-center">
+    <div className="flex-col gap-4 justify-center">
       <GameStateView />
-      game game game
-      {Object.values(Move).map((move) => (
-        <button
-          key={move}
-          onClick={() => makeMove(move)}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-        >
-          {move.charAt(0).toUpperCase() + move.slice(1)}
-        </button>
-      ))}
+      <div>
+        {Object.values(Move).map((move) => (
+          <button
+            key={move}
+            onClick={() => makeMove(move)}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          >
+            {move.charAt(0).toUpperCase() + move.slice(1)}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
