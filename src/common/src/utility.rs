@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
-use tokio::sync::{
-    broadcast,
-    mpsc::{Receiver, Sender},
-    Mutex,
+use tokio::{
+    signal::{self, unix::signal},
+    sync::{
+        broadcast,
+        mpsc::{Receiver, Sender},
+        Mutex,
+    },
 };
 
 #[derive(Clone)]
@@ -32,4 +35,31 @@ pub async fn create_shutdown_channel() -> broadcast::Receiver<()> {
             .expect("Failed to send shutdown signal");
     });
     shutdown_receiver
+}
+
+// Source: https://pg3.dev/post/7
+pub async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    tracing::info!("signal received, starting graceful shutdown");
 }

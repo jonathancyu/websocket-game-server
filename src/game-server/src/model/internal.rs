@@ -37,11 +37,3 @@ pub enum GameRequest {
     Move { player: Id, value: Move },
     Disconnect(Player), // TODO: impl
 }
-
-#[derive(Debug, Clone)]
-pub enum GameResponse {
-    Connected,
-    PendingMove,
-    RoundResult(RoundResult),
-    MatchResult { result: Result, wins: u8, total: u8 },
-}

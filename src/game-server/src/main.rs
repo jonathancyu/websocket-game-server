@@ -1,5 +1,6 @@
-use common::utility::{create_shutdown_channel, Channel};
+use common::utility::{create_shutdown_channel, shutdown_signal, Channel};
 use common::websocket::WebsocketHandler;
+use game_server::service::game_manager::GameManager;
 use game_server::service::game_socket::GameSocket;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -15,11 +16,18 @@ async fn main() {
     let shutdown_receiver = create_shutdown_channel().await;
     let mut game_shutdown_receiver = shutdown_receiver.resubscribe();
     let to_game_channel = Channel::from(mpsc::channel(100));
-    // TODO:
+
     // REST endpoint: listen for game creation signals from central server
     // One thread per game
+    let manager_handle = tokio::spawn(async move {
+        GameManager::new().listen("0.0.0.0:3031".to_owned(), shutdown_signal())
+    });
+    manager_handle
+        .await
+        .expect("Game manager exited non-gracefully");
 
     // Websocket handler - route client to its corresponding game
+    // TODO: one thread per game
     let websocket_handle: JoinHandle<()> = tokio::spawn(async move {
         GameSocket::new()
             .listen(
@@ -31,5 +39,5 @@ async fn main() {
     });
     websocket_handle
         .await
-        .expect("Matchmaking thread exited non-gracefully");
+        .expect("Socket thread exited non-gracefully");
 }

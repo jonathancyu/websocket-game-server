@@ -201,6 +201,7 @@ where
         }
     }
     // Read message from connection, return immediate response
+    // TODO: do we need the sender here if we're not responding immediately?
     async fn handle_external_message(
         connection: Connection<ExternalRS>,
         message: Message,

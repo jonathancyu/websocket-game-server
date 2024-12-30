@@ -44,11 +44,11 @@ where
 // Matchmaking <-> Game server interface
 #[derive(Deserialize)]
 pub struct CreateGameRequest {
-    game_id: Id,
-    players: Vec<Id>,
+    pub game_id: Id,
+    pub players: Vec<Id>,
 }
 
 #[derive(Serialize)]
 pub struct CreateGameResponse {
-    game_id: Id,
+    pub game_id: Id,
 }
