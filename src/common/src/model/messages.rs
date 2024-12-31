@@ -5,6 +5,12 @@ use uuid::Uuid;
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct Id(pub Uuid);
 
+impl Id {
+    pub fn new() -> Self {
+        Id(Uuid::new_v4())
+    }
+}
+
 impl<'de> Deserialize<'de> for Id {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -42,13 +48,13 @@ where
 }
 
 // Matchmaking <-> Game server interface
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct CreateGameRequest {
     pub game_id: Id,
     pub players: Vec<Id>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct CreateGameResponse {
     pub game_id: Id,
 }

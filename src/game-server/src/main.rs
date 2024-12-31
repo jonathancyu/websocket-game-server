@@ -61,9 +61,13 @@ async fn serve(
 // https://github.com/tokio-rs/axum/blob/main/examples/reqwest-response/src/main.rs
 #[cfg(test)]
 mod tests {
+    use common::model::messages::{CreateGameRequest, Id};
     use reqwest::{Client, StatusCode};
+    use serde_json::json;
     use tokio::{net::UdpSocket, sync::broadcast};
     use tracing::debug;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use uuid::Uuid;
 
     use super::*;
     struct TestServer {
@@ -73,12 +77,12 @@ mod tests {
     }
     impl TestServer {
         pub async fn new() -> Self {
-            // Init logging
-            tracing_subscriber::fmt()
+            // Init logging, ignore error if already set
+            let _ = tracing_subscriber::fmt()
                 .with_line_number(true)
                 .with_file(true)
                 .with_max_level(Level::DEBUG)
-                .init();
+                .try_init();
 
             // Create server
             let (shutdown_sender, shutdown_receiver) = tokio::sync::broadcast::channel(1);
@@ -122,7 +126,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn can_create_game() {
+    async fn serves_hello_world() {
         // Given
         let server = TestServer::new().await;
 
@@ -136,6 +140,33 @@ mod tests {
 
         // Then
         assert_eq!(response.status(), StatusCode::OK);
+        debug!("Response: {:?}", response.text().await);
+
+        server.shutdown().await;
+    }
+    #[tokio::test]
+    async fn can_create_game() {
+        // Given
+        let server = TestServer::new().await;
+
+        // When
+        let request = CreateGameRequest {
+            game_id: Id::new(),
+            players: vec![Id::new(), Id::new()],
+        };
+        let response = Client::new()
+            .post(endpoint(
+                server.manager_address.clone(),
+                "create_game".to_string(),
+            ))
+            .json(&request)
+            .send()
+            .await
+            .inspect_err(|e| eprintln!("{}", e))
+            .expect("Request failed");
+
+        // Then
+        assert_eq!(response.status(), StatusCode::CREATED);
         debug!("Response: {:?}", response.text().await);
 
         server.shutdown().await;
