@@ -57,12 +57,14 @@ impl GameManager {
         }
     }
 
-    pub async fn listen(&mut self, url: String) {
+    pub async fn listen(&mut self, address: String) {
         let app: Router = Router::new()
             .route("/", get(Self::root))
             .route("/create_game", post(Self::create_game));
-        let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-        info!("Listening on {}", url);
+        let listener = tokio::net::TcpListener::bind(address.clone())
+            .await
+            .unwrap();
+        info!("Game manager listening on {}", address);
         axum::serve(listener, app)
             .with_graceful_shutdown(shutdown_signal())
             .await
