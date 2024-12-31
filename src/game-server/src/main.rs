@@ -13,11 +13,11 @@ async fn main() {
         .with_file(true)
         .with_max_level(Level::DEBUG)
         .init();
-    serve().await;
+    let shutdown_receiver = create_shutdown_channel().await;
+    serve(shutdown_receiver).await;
 }
 
-async fn serve() {
-    let shutdown_receiver = create_shutdown_channel().await;
+async fn serve(shutdown_receiver: tokio::sync::broadcast::Receiver<()>) {
     let mut game_shutdown_receiver = shutdown_receiver.resubscribe();
     let to_game_channel = Channel::from(mpsc::channel(100));
 
@@ -56,15 +56,25 @@ mod tests {
     #[tokio::test]
     async fn can_create_game() {
         // Given
-        serve().await;
+        let (shutdown_sender, shutdown_receiver) = tokio::sync::broadcast::channel(1);
+
+        // Spawn server in background task
+        let server_handle = tokio::spawn(serve(shutdown_receiver));
+
+        // Give the server a moment to start
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
         let client = Client::new();
+
         // When
         let response = client
-            .get("http://0.0.0.0/3000")
+            .get("http://0.0.0.0:3000")
             .send()
             .await
             .expect("Request failed");
+        println!("GOT {:?}", response);
         // Then
         assert_eq!(response.status(), StatusCode::OK);
+        shutdown_sender.send(()).expect("Failed to shutdown");
     }
 }
