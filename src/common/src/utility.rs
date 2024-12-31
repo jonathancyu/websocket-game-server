@@ -37,7 +37,8 @@ pub async fn create_shutdown_channel() -> broadcast::Receiver<()> {
     shutdown_receiver
 }
 
-// Source: https://pg3.dev/post/7
+// TODO: consolodate with above
+// Source: https://github.com/tokio-rs/axum/blob/main/examples/graceful-shutdown/src/main.rs
 pub async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
@@ -60,6 +61,4 @@ pub async fn shutdown_signal() {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
-
-    tracing::info!("signal received, starting graceful shutdown");
 }

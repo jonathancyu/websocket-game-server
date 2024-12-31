@@ -5,9 +5,12 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use axum_macros::debug_handler;
-use common::model::messages::{CreateGameRequest, CreateGameResponse, Id};
+use common::{
+    model::messages::{CreateGameRequest, CreateGameResponse, Id},
+    utility::shutdown_signal,
+};
 use tokio::sync::{broadcast, Mutex};
+use tracing::info;
 use uuid::Uuid;
 
 use crate::model::internal::Player;
@@ -54,12 +57,16 @@ impl GameManager {
         }
     }
 
-    pub async fn listen(&mut self, url: String, shutdown_receiver: &mut broadcast::Receiver<()>) {
+    pub async fn listen(&mut self, url: String) {
         let app: Router = Router::new()
             .route("/", get(Self::root))
-            .route("/join_queue", post(Self::create_game));
+            .route("/create_game", post(Self::create_game));
         let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-        axum::serve(listener, app).await.unwrap();
+        info!("Listening on {}", url);
+        axum::serve(listener, app)
+            .with_graceful_shutdown(shutdown_signal())
+            .await
+            .unwrap();
     }
     async fn root() -> &'static str {
         "Hello, World!"
