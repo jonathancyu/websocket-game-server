@@ -61,9 +61,14 @@ async fn serve(
 // https://github.com/tokio-rs/axum/blob/main/examples/reqwest-response/src/main.rs
 #[cfg(test)]
 mod tests {
-    use common::model::messages::{CreateGameRequest, Id, SocketRequest};
+    use std::fs;
+
+    use common::{
+        model::messages::{CreateGameRequest, Id, SocketRequest},
+        websocket::test::TestCase,
+    };
     use futures_util::{SinkExt, StreamExt};
-    use game_server::model::external::ClientRequest;
+    use game_server::model::external::{ClientRequest, ClientResponse};
     use reqwest::{Client, StatusCode};
     use serde_json::json;
     use tokio::{net::UdpSocket, sync::broadcast};
@@ -219,5 +224,12 @@ mod tests {
             .await
             .expect("Response timed out");
         println!("socket resp {:?}", resp);
+    }
+    #[tokio::test]
+    async fn run_game() {
+        let data_path = env!("CARGO_MANIFEST_DIR").to_string() + "/tests/data/full_game.json";
+        let text = fs::read_to_string(data_path).expect("Unable to read file");
+        let test_case: TestCase<ClientRequest, ClientResponse> =
+            serde_json::from_str(&text).expect("Could not parse test case");
     }
 }

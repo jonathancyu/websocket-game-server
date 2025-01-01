@@ -1,0 +1,22 @@
+{
+  "sequence": [
+    {
+      "type": "Send",
+      "request": {
+        "user_id": "f177a23d-e0b6-4ba8-b70e-53eaba84473c",
+        "request": {
+          "type": "JoinGame"
+        }
+      }
+    },
+    {
+      "type": "Receive",
+      "response": {
+        "user_id": "f177a23d-e0b6-4ba8-b70e-53eaba84473c",
+        "message": {
+          "type": "GameJoined"
+        }
+      }
+    }
+  ]
+}

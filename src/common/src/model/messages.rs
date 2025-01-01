@@ -37,13 +37,14 @@ impl Serialize for Id {
 }
 
 // Websocket messages
-#[derive(Serialize, Deserialize)]
+// TODO: rename body field to body
+#[derive(Serialize, Deserialize, PartialEq)]
 pub struct SocketRequest<T> {
     pub user_id: Option<Id>,
     pub request: T,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(tag = "type")]
 pub struct SocketResponse<T>
 where
