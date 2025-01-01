@@ -216,7 +216,7 @@ mod tests {
         let (mut write_1, mut read_1) = ws_stream_1.split();
         let req = SocketRequest {
             user_id: Some(player_1),
-            request: ClientRequest::JoinGame,
+            body: ClientRequest::JoinGame,
         };
         let body: String = json!(req).to_string();
         write_1.send(Message::text(body)).await.unwrap();

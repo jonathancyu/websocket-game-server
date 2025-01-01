@@ -157,7 +157,7 @@ where
                         ws_sender.send(Message::Text(response_body)).await.unwrap();
 
                         // Drop connection according to criteria
-                        close_socket |= Self::drop_after_send(response.message);
+                        close_socket |= Self::drop_after_send(response.body);
                     }
                 }
 
@@ -185,7 +185,7 @@ where
                         ws_sender.send(Message::Text(response_body)).await.unwrap();
 
                         // Drop connection according to criteria
-                        close_socket |= Self::drop_after_send(response.message);
+                        close_socket |= Self::drop_after_send(response.body);
                     }
                 }
             };
@@ -217,12 +217,11 @@ where
             serde_json::from_str(body).expect("Could not deserialize request.");
 
         debug!("Got message {:?}", &message);
-        let response =
-            Self::respond_to_request(connection.clone(), request.request, mm_sender).await;
+        let response = Self::respond_to_request(connection.clone(), request.body, mm_sender).await;
 
         Ok(response.map(|response| SocketResponse {
             user_id: connection.user_id,
-            message: response,
+            body: response,
         }))
     }
 
@@ -237,7 +236,7 @@ where
         match receiver.try_recv() {
             Ok(message) => Some(SocketResponse {
                 user_id: connection.user_id,
-                message,
+                body,
             }),
             Err(_) => None,
         }

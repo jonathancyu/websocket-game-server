@@ -9,11 +9,11 @@ export enum ConnectionStatus {
 
 export type SocketRequest<T> = {
   userId: string | null;
-  request: T;
+  body: T;
 };
 export type SocketResponse<T> = {
   userId: string | null;
-  message: T;
+  body: T;
 };
 
 // TODO: Can I not just make a class...???
@@ -40,7 +40,7 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
   const send = (socket: WebSocket, request: RQ) => {
     const payload: SocketRequest<RQ> = {
       userId,
-      request,
+      body: request,
     };
     const as_string = JSON.stringify(payload);
     socket.send(as_string);
@@ -75,7 +75,7 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
       if (!userId) {
         setUserId(message.userId);
       }
-      onMessage(message.message);
+      onMessage(message.body);
     };
 
     // Fires when socket is closed by SERVER

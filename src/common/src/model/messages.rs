@@ -41,7 +41,7 @@ impl Serialize for Id {
 #[derive(Serialize, Deserialize, PartialEq)]
 pub struct SocketRequest<T> {
     pub user_id: Option<Id>,
-    pub request: T,
+    pub body: T,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -51,7 +51,7 @@ where
     T: Serialize,
 {
     pub user_id: Id, // TODO: in here?
-    pub message: T,
+    pub body: T,
 }
 
 // Matchmaking <-> Game server interface
