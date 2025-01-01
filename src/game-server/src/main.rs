@@ -61,10 +61,13 @@ async fn serve(
 // https://github.com/tokio-rs/axum/blob/main/examples/reqwest-response/src/main.rs
 #[cfg(test)]
 mod tests {
-    use common::model::messages::{CreateGameRequest, Id};
+    use common::model::messages::{CreateGameRequest, Id, SocketRequest};
+    use futures_util::{SinkExt, StreamExt};
+    use game_server::model::external::ClientRequest;
     use reqwest::{Client, StatusCode};
     use serde_json::json;
     use tokio::{net::UdpSocket, sync::broadcast};
+    use tokio_tungstenite::{connect_async, tungstenite::Message};
     use tracing::debug;
     use tracing_subscriber::util::SubscriberInitExt;
     use uuid::Uuid;
@@ -121,8 +124,8 @@ mod tests {
             .expect("Failed to unwrap local address")
             .to_string()
     }
-    fn endpoint(base_url: String, endpoint: String) -> String {
-        format!("http://{}/{}", base_url, endpoint)
+    fn endpoint(protocol: String, base_url: String, endpoint: String) -> String {
+        format!("{}://{}/{}", protocol, base_url, endpoint)
     }
 
     #[tokio::test]
@@ -132,7 +135,11 @@ mod tests {
 
         // When
         let response = Client::new()
-            .get(endpoint(server.manager_address.clone(), "".to_string()))
+            .get(endpoint(
+                "http".to_string(),
+                server.manager_address.clone(),
+                "".to_string(),
+            ))
             .send()
             .await
             .inspect_err(|e| eprintln!("{}", e))
@@ -156,6 +163,7 @@ mod tests {
         };
         let response = Client::new()
             .post(endpoint(
+                "http".to_string(),
                 server.manager_address.clone(),
                 "create_game".to_string(),
             ))
@@ -170,5 +178,46 @@ mod tests {
         debug!("Response: {:?}", response.text().await);
 
         server.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn simulate_full_game() {
+        let server = TestServer::new().await;
+
+        // Create game
+        let player_1 = Id::new();
+        let player_2 = Id::new();
+        let request = CreateGameRequest {
+            game_id: Id::new(),
+            players: vec![player_1.clone(), player_2.clone()],
+        };
+        let response = Client::new()
+            .post(endpoint(
+                "http".to_string(),
+                server.manager_address.clone(),
+                "create_game".to_string(),
+            ))
+            .json(&request)
+            .send()
+            .await
+            .inspect_err(|e| eprintln!("{}", e))
+            .expect("Request failed");
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // Make each player join
+        let (ws_stream_1, _) = connect_async(format!("ws://{}", server.socket_address.clone()))
+            .await
+            .unwrap();
+        let (mut write_1, mut read_1) = ws_stream_1.split();
+        let req = SocketRequest {
+            user_id: Some(player_1),
+            request: ClientRequest::JoinGame,
+        };
+        let body: String = json!(req).to_string();
+        write_1.send(Message::text(body)).await.unwrap();
+        let resp = tokio::time::timeout(tokio::time::Duration::from_secs(1), read_1.next())
+            .await
+            .expect("Response timed out");
+        println!("socket resp {:?}", resp);
     }
 }

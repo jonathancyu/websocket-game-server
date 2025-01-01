@@ -10,7 +10,7 @@ pub struct Player {
     pub sender: Sender<GameRequest>,
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Result {
     Win,
     Loss,
@@ -24,7 +24,7 @@ pub enum Move {
     Scissors,
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RoundResult {
     pub result: Result,
     pub other_move: Move,

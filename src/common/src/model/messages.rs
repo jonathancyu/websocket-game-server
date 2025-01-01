@@ -11,6 +11,12 @@ impl Id {
     }
 }
 
+impl Default for Id {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'de> Deserialize<'de> for Id {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -31,13 +37,13 @@ impl Serialize for Id {
 }
 
 // Websocket messages
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SocketRequest<T> {
     pub user_id: Option<Id>,
     pub request: T,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub struct SocketResponse<T>
 where
