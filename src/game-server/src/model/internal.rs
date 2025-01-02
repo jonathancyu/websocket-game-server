@@ -3,11 +3,13 @@ use tokio::sync::mpsc::Sender;
 
 use serde::{Deserialize, Serialize};
 
+use super::external::ClientResponse;
+
 // Types
 #[derive(Debug, Clone)]
 pub struct Player {
     pub id: Id,
-    pub sender: Sender<GameRequest>,
+    pub sender: Sender<ClientResponse>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

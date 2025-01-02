@@ -251,7 +251,7 @@ where
     async fn respond_to_request(
         connection: Connection<ExternalRS>,
         request: ExternalRQ,
-        mm_sender: Sender<InternalRQ>,
+        internal_sender: Sender<InternalRQ>,
     ) -> Option<ExternalRS> {
         None
     }
