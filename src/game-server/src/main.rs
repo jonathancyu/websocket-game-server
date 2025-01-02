@@ -29,8 +29,11 @@ async fn serve(
 
     // REST endpoint: listen for game creation signals from central server
     // One thread per game
-    let manager_handle =
-        tokio::spawn(async move { GameManager::new().listen(manager_address).await });
+    let manager_handle = tokio::spawn(async move {
+        GameManager::new()
+            .listen(manager_address, to_game_channel.receiver)
+            .await
+    });
     // Websocket handler - route client to its corresponding game
     // TODO: one thread per game
     let websocket_handle: JoinHandle<()> = tokio::spawn(async move {
@@ -53,6 +56,7 @@ async fn serve(
         .expect("Game manager exited non-gracefully");
 }
 
+/// TODO: Does this belong in tests/?
 // reference: https://github.com/tokio-rs/axum/blob/main/examples/testing/src/main.rs
 // https://github.com/tokio-rs/axum/blob/main/examples/reqwest-response/src/main.rs
 #[cfg(test)]
@@ -60,7 +64,10 @@ mod tests {
     use std::fs;
 
     use common::{
-        model::messages::{CreateGameRequest, Id, SocketRequest},
+        model::messages::{
+            CreateGameRequest, CreateGameResponse, GetGameRequest, GetGameResponse, Id,
+            SocketRequest,
+        },
         websocket::test::TestCase,
     };
     use futures_util::{SinkExt, StreamExt};
@@ -159,25 +166,43 @@ mod tests {
     }
     #[tokio::test]
     async fn can_create_game() {
-        // Given
         let server = TestServer::new().await;
 
-        // When
+        // POST game
         let request = CreateGameRequest {
-            game_id: Id::new(),
             players: vec![Id::new(), Id::new()],
         };
-        let response = Client::new()
+        let client = Client::new();
+        let response = client
             .post(url("http", server.manager_address.clone(), "create_game"))
             .json(&request)
             .send()
             .await
-            .inspect_err(|e| eprintln!("{}", e))
             .expect("Request failed");
+        assert_eq!(StatusCode::CREATED, response.status());
 
-        // Then
-        assert_eq!(response.status(), StatusCode::CREATED);
-        debug!("Response: {:?}", response.text().await);
+        let game = response
+            .json::<CreateGameResponse>()
+            .await
+            .expect("Failed to get create game response body");
+        let game_id = game.game_id.clone();
+
+        // GET game
+        let response = client
+            .post(url("http", server.manager_address.clone(), "get_game"))
+            .json(&GetGameRequest {
+                game_id: game_id.clone(),
+            })
+            .send()
+            .await
+            .expect("Request failed");
+        assert_eq!(StatusCode::OK, response.status());
+
+        let game = response
+            .json::<GetGameResponse>()
+            .await
+            .expect("Failed to get game response body");
+        assert_eq!(game_id, game.game_id);
 
         server.shutdown().await;
     }
@@ -190,7 +215,6 @@ mod tests {
         let player_1 = Id::new();
         let player_2 = Id::new();
         let request = CreateGameRequest {
-            game_id: Id::new(),
             players: vec![player_1.clone(), player_2.clone()],
         };
         let response = Client::new()
@@ -218,6 +242,7 @@ mod tests {
             .expect("Response timed out");
         println!("socket resp {:?}", resp);
     }
+
     #[tokio::test]
     async fn run_game() {
         let server = TestServer::new().await;
@@ -225,6 +250,7 @@ mod tests {
         let text = fs::read_to_string(data_path).expect("Unable to read file");
         let test_case: TestCase<ClientRequest, ClientResponse> =
             serde_json::from_str(&text).expect("Could not parse test case");
+        // TODO: how to emulate two different sockets?
         test_case.run(url("ws", server.socket_address, "")).await;
     }
 }

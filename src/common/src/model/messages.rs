@@ -57,11 +57,21 @@ where
 // Matchmaking <-> Game server interface
 #[derive(Serialize, Deserialize)]
 pub struct CreateGameRequest {
-    pub game_id: Id,
-    pub players: Vec<Id>,
+    pub players: Vec<Id>, // TODO: into tuple
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct CreateGameResponse {
     pub game_id: Id,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GetGameRequest {
+    pub game_id: Id,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GetGameResponse {
+    pub game_id: Id,
+    pub players: (Id, Id),
 }

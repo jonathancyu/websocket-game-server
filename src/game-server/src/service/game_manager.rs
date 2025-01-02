@@ -1,66 +1,61 @@
 use std::{collections::HashMap, sync::Arc};
 
 use axum::{
+    extract::State,
     http::StatusCode,
+    response::{IntoResponse, Response},
     routing::{get, post},
-    Json, Router,
+    Extension, Json, Router,
 };
 use common::{
-    model::messages::{CreateGameRequest, CreateGameResponse, Id},
+    model::messages::{CreateGameRequest, CreateGameResponse, GetGameRequest, GetGameResponse, Id},
     utility::shutdown_signal,
 };
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{broadcast, mpsc::Receiver, Mutex};
 use tracing::info;
 use uuid::Uuid;
 
-use crate::model::internal::Player;
+use crate::model::internal::{GameRequest, Player};
 
 #[derive(Debug, Clone)]
 struct Game {
     id: Id,
-    players: (Player, Player),
+    players: (Id, Id),
 }
 
-pub struct GameManager {
-    games: HashMap<Id, Arc<Mutex<Game>>>,
+struct GameManagerState {
+    pub games: HashMap<Id, Arc<Mutex<Game>>>,
+    pub player_assignment: HashMap<Id, Id>,
 }
-
-/*
-#[tokio::main]
-async fn main() {
-    let app: Router = Router::new()
-        .route("/", get(root))
-        .route("/join_queue", post(join_queue));
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
-}
-
-async fn root() -> &'static str {
-    "Hello world"
-}
-
-async fn join_queue(Json(payload): Json<QueueRequest>) -> (StatusCode, Json<String>) {
-    let result = format!("hi {}", payload.user_id);
-    (StatusCode::OK, Json(result))
-}
-
-#[derive(Deserialize)]
-struct QueueRequest {
-    pub user_id: u64,
-}
-*/
+pub struct GameManager {}
 
 impl GameManager {
     pub fn new() -> Self {
-        GameManager {
-            games: HashMap::new(),
-        }
+        GameManager {}
     }
 
-    pub async fn listen(&mut self, address: String) {
+    pub async fn listen(
+        &mut self,
+        address: String,
+        from_socket: Arc<Mutex<Receiver<GameRequest>>>,
+    ) {
+        let state = Arc::new(Mutex::new(GameManagerState {
+            games: HashMap::new(),
+            player_assignment: HashMap::new(),
+        }));
+        // Serve REST endpoint
+        self.serve_rest_endpoint(address, state).await;
+
+        // Spawn game handler
+    }
+
+    async fn serve_rest_endpoint(&self, address: String, state: Arc<Mutex<GameManagerState>>) {
         let app: Router = Router::new()
             .route("/", get(Self::root))
-            .route("/create_game", post(Self::create_game));
+            .route("/create_game", post(Self::create_game))
+            .route("/get_game", post(Self::get_game)) // HACK: no good way to get path params thus
+            // this is a post :D
+            .with_state(state);
         let listener = tokio::net::TcpListener::bind(address.clone())
             .await
             .unwrap();
@@ -70,19 +65,62 @@ impl GameManager {
             .await
             .unwrap();
     }
+
     async fn root() -> &'static str {
         "Hello, World!"
     }
 
     async fn create_game(
-        Json(_request): Json<CreateGameRequest>,
-    ) -> (StatusCode, Json<CreateGameResponse>) {
+        State(state): State<Arc<Mutex<GameManagerState>>>,
+        Json(request): Json<CreateGameRequest>,
+    ) -> Response {
+        // TODO:
+        let mut state = state.lock().await;
+        // Unpack player IDs
+        let [player_1, player_2] = request.players.as_slice() else {
+            panic!("Expected 2 player IDs")
+        };
+        // Check if players are already in a game
+        if state.player_assignment.contains_key(player_1)
+            || state.player_assignment.contains_key(player_2)
+        {
+            return (StatusCode::CONFLICT, "A player is already in a game").into_response();
+        }
+
+        // Insert new game
+        let id = Id::new();
+        let game = Game {
+            id: id.clone(),
+            players: (player_1.clone(), player_2.clone()),
+        };
+        state.games.insert(id.clone(), Arc::new(Mutex::new(game)));
+
         (
             StatusCode::CREATED,
-            Json(CreateGameResponse {
-                game_id: Id(Uuid::new_v4()),
+            Json(CreateGameResponse { game_id: id }),
+        )
+            .into_response()
+    }
+
+    async fn get_game(
+        State(state): State<Arc<Mutex<GameManagerState>>>,
+        Json(request): Json<GetGameRequest>,
+    ) -> Response {
+        let game_id = request.game_id;
+        let state = state.lock().await;
+        if !state.games.contains_key(&game_id) {
+            return StatusCode::NOT_FOUND.into_response();
+        }
+        let game = state.games.get(&game_id).unwrap().lock().await;
+
+        (
+            StatusCode::OK,
+            Json(GetGameResponse {
+                game_id,
+                players: game.players.clone(),
             }),
         )
+            .into_response()
     }
 }
 
