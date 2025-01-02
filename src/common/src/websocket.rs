@@ -219,9 +219,9 @@ where
         debug!("Got message {:?}", &message);
         let response = Self::respond_to_request(connection.clone(), request.body, mm_sender).await;
 
-        Ok(response.map(|response| SocketResponse {
+        Ok(response.map(|body| SocketResponse {
             user_id: connection.user_id,
-            body: response,
+            body,
         }))
     }
 
@@ -234,7 +234,7 @@ where
 
         // If message was sent, forward to user
         match receiver.try_recv() {
-            Ok(message) => Some(SocketResponse {
+            Ok(body) => Some(SocketResponse {
                 user_id: connection.user_id,
                 body,
             }),
@@ -291,7 +291,7 @@ pub mod test {
         RQ: Serialize,
         RS: Serialize + for<'de> Deserialize<'de> + Debug + PartialEq,
     {
-        async fn run(&self, socket_address: String) {
+        pub async fn run(&self, socket_address: String) {
             let (ws_stream, _) = connect_async(socket_address).await.unwrap();
             let (mut write, mut read) = ws_stream.split();
             let timeout_len = Duration::from_millis(500);

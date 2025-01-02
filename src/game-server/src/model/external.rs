@@ -10,7 +10,7 @@ pub enum ClientRequest {
     Move { r#move: Move },
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "type")]
 pub enum ClientResponse {
     GameJoined,

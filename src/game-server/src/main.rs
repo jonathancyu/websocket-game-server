@@ -15,7 +15,7 @@ async fn main() {
         .init();
     let shutdown_receiver = create_shutdown_channel().await;
     let manager_address = "0.0.0.0:8080".to_owned();
-    let socket_address = "0.0.0.0:3002".to_owned();
+    let socket_address = "0.0.0.0:3002/test".to_owned();
     serve(manager_address, socket_address, shutdown_receiver, None).await;
 }
 async fn serve(
@@ -51,10 +51,6 @@ async fn serve(
     manager_handle
         .await
         .expect("Game manager exited non-gracefully");
-
-    websocket_handle
-        .await
-        .expect("Socket thread exited non-gracefully");
 }
 
 // reference: https://github.com/tokio-rs/axum/blob/main/examples/testing/src/main.rs
@@ -74,8 +70,6 @@ mod tests {
     use tokio::{net::UdpSocket, sync::broadcast};
     use tokio_tungstenite::{connect_async, tungstenite::Message};
     use tracing::debug;
-    use tracing_subscriber::util::SubscriberInitExt;
-    use uuid::Uuid;
 
     use super::*;
     struct TestServer {
@@ -129,8 +123,19 @@ mod tests {
             .expect("Failed to unwrap local address")
             .to_string()
     }
-    fn endpoint(protocol: String, base_url: String, endpoint: String) -> String {
-        format!("{}://{}/{}", protocol, base_url, endpoint)
+
+    fn url<A, B, C>(protocol: A, base_url: B, endpoint: C) -> String
+    where
+        A: ToString,
+        B: ToString,
+        C: ToString,
+    {
+        format!(
+            "{}://{}/{}",
+            protocol.to_string(),
+            base_url.to_string(),
+            endpoint.to_string()
+        )
     }
 
     #[tokio::test]
@@ -140,11 +145,7 @@ mod tests {
 
         // When
         let response = Client::new()
-            .get(endpoint(
-                "http".to_string(),
-                server.manager_address.clone(),
-                "".to_string(),
-            ))
+            .get(url("http", server.manager_address.clone(), ""))
             .send()
             .await
             .inspect_err(|e| eprintln!("{}", e))
@@ -167,11 +168,7 @@ mod tests {
             players: vec![Id::new(), Id::new()],
         };
         let response = Client::new()
-            .post(endpoint(
-                "http".to_string(),
-                server.manager_address.clone(),
-                "create_game".to_string(),
-            ))
+            .post(url("http", server.manager_address.clone(), "create_game"))
             .json(&request)
             .send()
             .await
@@ -197,11 +194,7 @@ mod tests {
             players: vec![player_1.clone(), player_2.clone()],
         };
         let response = Client::new()
-            .post(endpoint(
-                "http".to_string(),
-                server.manager_address.clone(),
-                "create_game".to_string(),
-            ))
+            .post(url("http", server.manager_address.clone(), "create_game"))
             .json(&request)
             .send()
             .await
@@ -227,9 +220,11 @@ mod tests {
     }
     #[tokio::test]
     async fn run_game() {
+        let server = TestServer::new().await;
         let data_path = env!("CARGO_MANIFEST_DIR").to_string() + "/tests/data/full_game.json";
         let text = fs::read_to_string(data_path).expect("Unable to read file");
         let test_case: TestCase<ClientRequest, ClientResponse> =
             serde_json::from_str(&text).expect("Could not parse test case");
+        test_case.run(url("ws", server.socket_address, "")).await;
     }
 }
