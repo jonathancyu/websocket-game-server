@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -8,6 +10,11 @@ pub struct Id(pub Uuid);
 impl Id {
     pub fn new() -> Self {
         Id(Uuid::new_v4())
+    }
+}
+impl fmt::Display for Id {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -27,6 +34,7 @@ impl<'de> Deserialize<'de> for Id {
         Ok(Id(uuid))
     }
 }
+
 impl Serialize for Id {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

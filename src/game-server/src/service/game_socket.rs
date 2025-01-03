@@ -4,7 +4,7 @@ use crate::model::{
     external::{ClientRequest, ClientResponse},
     internal::{GameRequest, Player},
 };
-use axum::async_trait;
+use async_trait::async_trait;
 use common::websocket::{Connection, WebSocketState, WebsocketHandler};
 use tokio::sync::{mpsc::Sender, Mutex};
 pub struct GameSocket {

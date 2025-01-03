@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -12,6 +12,7 @@ use common::{
     utility::shutdown_signal,
 };
 use tokio::sync::{broadcast, mpsc::Receiver, Mutex};
+use tower_http::trace::TraceLayer;
 use tracing::info;
 use uuid::Uuid;
 
@@ -51,10 +52,10 @@ impl GameManager {
 
     async fn serve_rest_endpoint(&self, address: String, state: Arc<Mutex<GameManagerState>>) {
         let app: Router = Router::new()
+            .layer(TraceLayer::new_for_http())
             .route("/", get(Self::root))
             .route("/create_game", post(Self::create_game))
-            .route("/get_game", post(Self::get_game)) // HACK: no good way to get path params thus
-            // this is a post :D
+            .route("/game/{game_id}", get(Self::get_game))
             .with_state(state);
         let listener = tokio::net::TcpListener::bind(address.clone())
             .await
@@ -103,10 +104,9 @@ impl GameManager {
     }
 
     async fn get_game(
+        Path(game_id): Path<Id>,
         State(state): State<Arc<Mutex<GameManagerState>>>,
-        Json(request): Json<GetGameRequest>,
     ) -> Response {
-        let game_id = request.game_id;
         let state = state.lock().await;
         if !state.games.contains_key(&game_id) {
             return StatusCode::NOT_FOUND.into_response();
