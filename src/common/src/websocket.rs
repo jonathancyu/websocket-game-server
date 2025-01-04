@@ -260,7 +260,7 @@ where
 pub mod test {
     use std::{fmt::Debug, time::Duration};
 
-    use futures_util::{SinkExt, StreamExt};
+    use futures_util::{SinkExt, StreamExt, TryStreamExt};
     use serde::{Deserialize, Serialize};
     use serde_json::json;
     use tokio::time::timeout;
@@ -298,6 +298,10 @@ pub mod test {
             for event in self.sequence.iter() {
                 match event {
                     Event::Send { request } => {
+                        if let Ok(msg) = timeout(timeout_len, read.try_next()).await {
+                            panic!("Expected no incoming message, got {:?}", msg);
+                        }
+
                         let body: String = json!(request).to_string();
                         timeout(timeout_len, write.send(Message::text(body)))
                             .await
@@ -307,7 +311,9 @@ pub mod test {
                     Event::Receive { response: expected } => {
                         let body = timeout(timeout_len, read.next())
                             .await
-                            .expect("Timeout reading response")
+                            .unwrap_or_else(|e| {
+                                panic!("Timeout (error {:?}) waiting for {:?}", e, expected)
+                            })
                             .expect("No message found")
                             .expect("Failed to read message");
                         let response: SocketResponse<RS> = serde_json::from_str(
