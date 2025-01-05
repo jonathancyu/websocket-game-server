@@ -1,4 +1,4 @@
-use common::utility::{create_shutdown_channel, Channel};
+use common::utility::create_shutdown_channel;
 use common::websocket::WebsocketHandler;
 use game_server::model::internal::GameRequest;
 use game_server::service::game_manager::GameManager;

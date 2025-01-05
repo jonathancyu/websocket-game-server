@@ -4,12 +4,11 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
-    Extension, Json, Router,
+    routing::{get, post}, Json, Router,
 };
 use common::{
-    model::messages::{CreateGameRequest, CreateGameResponse, GetGameRequest, GetGameResponse, Id},
-    utility::{shutdown_signal, Channel},
+    model::messages::{CreateGameRequest, CreateGameResponse, GetGameResponse, Id},
+    utility::Channel,
 };
 use tokio::sync::{
     broadcast,
@@ -17,10 +16,9 @@ use tokio::sync::{
     Mutex,
 };
 use tower_http::trace::TraceLayer;
-use tracing::{error, info, warn};
-use uuid::Uuid;
+use tracing::{info, warn};
 
-use crate::model::internal::{GameRequest, Player};
+use crate::model::internal::GameRequest;
 
 #[derive(Debug)]
 struct Game {

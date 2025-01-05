@@ -1,6 +1,5 @@
 use std::{
     collections::{HashSet, VecDeque},
-    net::Ipv6Addr,
     sync::Arc,
 };
 

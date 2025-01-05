@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use tokio::{
-    signal::{self, unix::signal},
+    signal::{self},
     sync::{
         broadcast,
         mpsc::{Receiver, Sender},
