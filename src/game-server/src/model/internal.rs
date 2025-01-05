@@ -3,7 +3,7 @@ use tokio::sync::mpsc::Sender;
 
 use serde::{Deserialize, Serialize};
 
-use super::external::ClientResponse;
+use super::external::{ClientRequest, ClientResponse};
 
 // Types
 #[derive(Debug, Clone)]
@@ -25,6 +25,20 @@ pub enum Move {
     Paper,
     Scissors,
 }
+impl Move {
+    pub fn beats(&self, other: &Move) -> Option<bool> {
+        if self == other {
+            None
+        } else {
+            Some(matches!(
+                (self, other),
+                (Move::Rock, Move::Scissors)
+                    | (Move::Scissors, Move::Paper)
+                    | (Move::Paper, Move::Rock)
+            ))
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RoundResult {
@@ -34,8 +48,7 @@ pub struct RoundResult {
 
 // Messages
 #[derive(Debug, Clone)]
-pub enum GameRequest {
-    Connect(Player),
-    Move { player: Id, value: Move },
-    Disconnect(Player), // TODO: impl
+pub struct GameRequest {
+    pub player: Player,
+    pub request: ClientRequest,
 }

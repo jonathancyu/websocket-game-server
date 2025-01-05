@@ -9,19 +9,24 @@ use axum::{
 };
 use common::{
     model::messages::{CreateGameRequest, CreateGameResponse, GetGameRequest, GetGameResponse, Id},
-    utility::shutdown_signal,
+    utility::{shutdown_signal, Channel},
 };
-use tokio::sync::{broadcast, mpsc::Receiver, Mutex};
+use tokio::sync::{
+    broadcast,
+    mpsc::{self, Receiver},
+    Mutex,
+};
 use tower_http::trace::TraceLayer;
-use tracing::info;
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::model::internal::{GameRequest, Player};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Game {
     id: Id,
     players: (Id, Id),
+    to_game: mpsc::Sender<GameRequest>,
 }
 
 struct GameManagerState {
@@ -38,19 +43,67 @@ impl GameManager {
     pub async fn listen(
         &mut self,
         address: String,
-        from_socket: Arc<Mutex<Receiver<GameRequest>>>,
+        shutdown_receiver: &mut broadcast::Receiver<()>,
+        from_socket: Receiver<GameRequest>,
     ) {
         let state = Arc::new(Mutex::new(GameManagerState {
             games: HashMap::new(),
             player_assignment: HashMap::new(),
         }));
         // Serve REST endpoint
-        self.serve_rest_endpoint(address, state).await;
+        let rest_shutdown = shutdown_receiver.resubscribe();
+        self.serve_rest_endpoint(address, state.clone(), rest_shutdown)
+            .await;
 
-        // Spawn game handler
+        // Spawn main thread to route game messages to game threads
+        Self::game_router_thread(state.clone(), shutdown_receiver, from_socket).await;
+        // TODO: some sort of collector to cleanup dead games? or threads clean themselves
     }
 
-    async fn serve_rest_endpoint(&self, address: String, state: Arc<Mutex<GameManagerState>>) {
+    // Game logic loop
+    async fn game_router_thread(
+        state: Arc<Mutex<GameManagerState>>,
+        shutdown_receiver: &mut broadcast::Receiver<()>,
+        mut from_socket: Receiver<GameRequest>,
+    ) {
+        loop {
+            tokio::select! {
+                result = from_socket.recv() => {
+                    match result {
+                        Some(request) => {
+                            Self::route_request(state.clone(), request).await;
+                        },
+                        _ => {}
+                    }
+                },
+                _ = shutdown_receiver.recv() => {
+                    break;
+                }
+            };
+        }
+    }
+
+    async fn route_request(state: Arc<Mutex<GameManagerState>>, request: GameRequest) {
+        let state = state.lock().await;
+        let player_id = request.player.id.clone();
+        match state.games.get(&player_id) {
+            Some(game) => {
+                let game = game.lock().await;
+                game.to_game.send(request);
+            }
+            None => warn!("No game for player {:?}", player_id),
+        };
+    }
+
+    // Game logic
+
+    // REST functions
+    async fn serve_rest_endpoint(
+        &self,
+        address: String,
+        state: Arc<Mutex<GameManagerState>>,
+        mut shutdown_receiver: broadcast::Receiver<()>,
+    ) {
         let app: Router = Router::new()
             .layer(TraceLayer::new_for_http())
             .route("/", get(Self::root))
@@ -62,7 +115,12 @@ impl GameManager {
             .unwrap();
         info!("Game manager listening on {}", address);
         axum::serve(listener, app)
-            .with_graceful_shutdown(shutdown_signal())
+            .with_graceful_shutdown(async move {
+                shutdown_receiver
+                    .recv()
+                    .await
+                    .expect("Failed to receive shutdown signal");
+            })
             .await
             .unwrap();
     }
@@ -90,9 +148,12 @@ impl GameManager {
 
         // Insert new game
         let id = Id::new();
+        let channel = Channel::<GameRequest>::from(mpsc::channel(100)); // TODO:
+                                                                        // what's the size here
         let game = Game {
             id: id.clone(),
             players: (player_1.clone(), player_2.clone()),
+            to_game: channel.sender,
         };
         state.games.insert(id.clone(), Arc::new(Mutex::new(game)));
 

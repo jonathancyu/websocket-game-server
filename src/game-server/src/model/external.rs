@@ -3,11 +3,11 @@ use serde::{Deserialize, Serialize};
 use super::internal::{Move, Result, RoundResult};
 
 // Client types
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type")]
 pub enum ClientRequest {
     JoinGame,
-    Move { r#move: Move },
+    Move { value: Move },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

@@ -1,5 +1,6 @@
 use common::utility::{create_shutdown_channel, Channel};
 use common::websocket::WebsocketHandler;
+use game_server::model::internal::GameRequest;
 use game_server::service::game_manager::GameManager;
 use game_server::service::game_socket::GameSocket;
 use tokio::sync::mpsc;
@@ -25,24 +26,27 @@ async fn serve(
     ready_signal: Option<tokio::sync::oneshot::Sender<()>>,
 ) {
     let mut game_shutdown_receiver = shutdown_receiver.resubscribe();
-    let to_game_channel = Channel::from(mpsc::channel(100));
+    let mut manager_shutdown_receiver = shutdown_receiver.resubscribe();
+    let (to_game_sender, to_game_receiver): (
+        mpsc::Sender<GameRequest>,
+        mpsc::Receiver<GameRequest>,
+    ) = mpsc::channel(100);
 
     // REST endpoint: listen for game creation signals from central server
     // One thread per game
     let manager_handle = tokio::spawn(async move {
         GameManager::new()
-            .listen(manager_address, to_game_channel.receiver)
+            .listen(
+                manager_address,
+                &mut manager_shutdown_receiver,
+                to_game_receiver,
+            )
             .await
     });
     // Websocket handler - route client to its corresponding game
-    // TODO: one thread per game
     let websocket_handle: JoinHandle<()> = tokio::spawn(async move {
         GameSocket::new()
-            .listen(
-                socket_address,
-                &mut game_shutdown_receiver,
-                to_game_channel.sender,
-            )
+            .listen(socket_address, &mut game_shutdown_receiver, to_game_sender)
             .await
     });
     // Signal that the server is ready

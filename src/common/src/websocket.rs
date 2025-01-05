@@ -298,6 +298,7 @@ pub mod test {
             for event in self.sequence.iter() {
                 match event {
                     Event::Send { request } => {
+                        // TODO: UNLESS it's a ping message
                         if let Ok(msg) = timeout(timeout_len, read.try_next()).await {
                             panic!("Expected no incoming message, got {:?}", msg);
                         }

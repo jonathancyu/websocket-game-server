@@ -34,19 +34,18 @@ impl WebsocketHandler<ClientRequest, ClientResponse, GameRequest> for GameSocket
         request: ClientRequest,
         internal_sender: Sender<GameRequest>,
     ) -> Option<ClientResponse> {
-        match request {
-            ClientRequest::JoinGame => {
-                internal_sender
-                    .send(GameRequest::Connect(Player {
-                        id: connection.user_id.clone(),
-                        sender: connection.to_socket.sender.clone(),
-                    }))
-                    .await
-                    .expect("Failed to send internal message");
-                None
-            }
-            ClientRequest::Move { r#move: _ } => None,
-        }
+        // Resolve player object and route to game manager
+        internal_sender
+            .send(GameRequest {
+                player: Player {
+                    id: connection.user_id,
+                    sender: connection.to_socket.sender.clone(),
+                },
+                request,
+            })
+            .await
+            .expect("Failed to send internal message");
+        None
     }
 
     fn drop_after_send(response: ClientResponse) -> bool {

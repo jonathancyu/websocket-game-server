@@ -26,20 +26,6 @@ impl<T> From<(Sender<T>, Receiver<T>)> for Channel<T> {
 pub async fn create_shutdown_channel() -> broadcast::Receiver<()> {
     let (shutdown_sender, shutdown_receiver): (broadcast::Sender<()>, broadcast::Receiver<()>) =
         broadcast::channel::<()>(100);
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("Failed to listen for ctrl-c");
-        shutdown_sender
-            .send(())
-            .expect("Failed to send shutdown signal");
-    });
-    shutdown_receiver
-}
-
-// TODO: consolodate with above
-// Source: https://github.com/tokio-rs/axum/blob/main/examples/graceful-shutdown/src/main.rs
-pub async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -56,9 +42,18 @@ pub async fn shutdown_signal() {
 
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
+    tokio::spawn(async move {
+        tokio::select! {
+            _ = ctrl_c => {},
+            _ = terminate => {},
+        }
+        shutdown_sender
+            .send(())
+            .expect("Failed to send shutdown signal");
+    });
+    shutdown_receiver
 }
+
+// TODO: consolodate with above
+// Source: https://github.com/tokio-rs/axum/blob/main/examples/graceful-shutdown/src/main.rs
+pub async fn shutdown_signal() {}
