@@ -69,18 +69,23 @@ impl GameState {
                         return;
                     }
                 }
-                if connected.len() == 2 {
-                    // Players are ready, prompt for moves
-                    debug!("All players connected, notifying.");
-                    for player in self.players.values() {
-                        player
-                            .sender
-                            .send(ClientResponse::PendingMove)
-                            .await
-                            .expect("Failed to send message to player");
-                    }
+                if connected.len() < 2 {
+                    self.phase = GamePhase::WaitingForPlayers { connected };
+                    return;
                 }
-                self.phase = GamePhase::WaitingForPlayers { connected };
+
+                // Players are ready, prompt for moves
+                debug!("All players connected, notifying.");
+                for player in self.players.values() {
+                    player
+                        .sender
+                        .send(ClientResponse::PendingMove)
+                        .await
+                        .expect("Failed to send message to player");
+                }
+                self.phase = GamePhase::PendingMoves {
+                    moves: HashMap::new(),
+                };
             }
             GamePhase::PendingMoves { ref moves } => {
                 // TODO: can we just modify moves as mut? pls
