@@ -19,7 +19,7 @@ use tokio_tungstenite::{
         Message,
     },
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -125,9 +125,34 @@ where
 
         let stream = accept_async(stream).await.unwrap();
         let (mut ws_sender, mut ws_receiver) = stream.split();
-        // TODO: handshake, then resolve connection from state
-        let _connection_id: Option<Id> = None;
-        let user_id = Id(Uuid::new_v4());
+        // The first message sent is always the user's id:
+        // TODO: extract to fn, add shutdown listener
+        let mut user_id = None;
+        while user_id.is_none() {
+            match ws_receiver.next().await {
+                None => {
+                    warn!("Connection closed before receiving user ID");
+                    return;
+                }
+                Some(Err(e)) => {
+                    warn!("Error receiving message: {}", e);
+                    continue;
+                }
+                Some(Ok(msg)) => {
+                    if let Ok(msg_str) = msg.to_text() {
+                        if let Ok(request) = serde_json::from_str::<SocketRequest<()>>(msg_str) {
+                            user_id = request.user_id;
+                        } else {
+                            warn!("Failed to parse identification message");
+                        }
+                    } else {
+                        warn!("Received non-text message");
+                    }
+                }
+            }
+        }
+        // TODO: how to make this guaranteed at compile time?
+        let user_id = user_id.expect("UserID can't be null at this point, right..?");
 
         // Lookup user's Connection by user_id
         let connection = {

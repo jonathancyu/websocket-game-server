@@ -103,8 +103,7 @@ impl GameManager {
     async fn route_request(state: Arc<Mutex<GameManagerState>>, request: GameRequest) {
         let state = state.lock().await;
         let player_id = request.player.id;
-        // BUG: pick up here - game lookup from above isn't being updated when we try to access it
-        // :(
+        debug!("State when getting req: {:?}", state.player_assignment);
         match state.games.get(&player_id) {
             Some(game) => {
                 let game = game.lock().await;
@@ -177,7 +176,8 @@ impl GameManager {
         let game_id = Id::new();
         let (to_game, from_socket) = mpsc::channel(100); // TODO:
                                                          // what's the size here
-                                                         // Assign players to the game
+
+        // Assign players to the game
         state.player_assignment.insert(player_1, game_id);
         state.player_assignment.insert(player_2, game_id);
 
