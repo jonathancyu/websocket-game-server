@@ -86,6 +86,7 @@ impl GameState {
                 self.phase = GamePhase::WaitingForPlayers { connected };
             }
             GamePhase::PendingMoves { ref moves } => {
+                // TODO: can we just modify moves as mut? pls
                 let mut moves = moves.clone();
                 let ClientRequest::Move { value } = request.request else {
                     warn!("Got non-Move message in PendingMoves phase");
