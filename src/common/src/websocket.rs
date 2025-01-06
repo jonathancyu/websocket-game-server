@@ -137,14 +137,12 @@ where
                 .lock()
                 .await
                 .user_handles
-                .entry(user_id.clone())
-                .or_insert_with(|| {
-                    Connection::new(user_id.clone(), Channel::from(mpsc::channel(100)))
-                })
+                .entry(user_id)
+                .or_insert_with(|| Connection::new(user_id, Channel::from(mpsc::channel(100))))
                 .clone()
         };
 
-        debug!("Listening to {:?}", user_id.clone());
+        debug!("Listening to {:?}", user_id);
         let mut interval = time::interval(Duration::from_secs(1));
         loop {
             let mut close_socket = false;

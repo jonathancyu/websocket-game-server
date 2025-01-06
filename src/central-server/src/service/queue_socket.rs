@@ -26,7 +26,7 @@ impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest> for Que
             ClientRequest::JoinQueue => {
                 // Tell matchmaking to add user to the queue
                 let mm_request = MatchmakingRequest::JoinQueue(Player {
-                    id: connection.user_id.clone(),
+                    id: connection.user_id,
                     sender: connection.to_socket.sender.clone(),
                 });
                 debug!("Send mm {:?}", mm_request);

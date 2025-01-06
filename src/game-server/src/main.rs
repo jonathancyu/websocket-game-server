@@ -193,7 +193,7 @@ mod tests {
             .json::<CreateGameResponse>()
             .await
             .expect("Failed to get create game response body");
-        let game_id = game.game_id.clone();
+        let game_id = game.game_id;
 
         // GET game
         let get_url = url(
@@ -203,9 +203,7 @@ mod tests {
         );
         let response = client
             .get(dbg!(get_url))
-            .json(&GetGameRequest {
-                game_id: game_id.clone(),
-            })
+            .json(&GetGameRequest { game_id })
             .send()
             .await
             .expect("Request failed");
@@ -228,7 +226,7 @@ mod tests {
         let player_1 = Id::new();
         let player_2 = Id::new();
         let request = CreateGameRequest {
-            players: vec![player_1.clone(), player_2.clone()],
+            players: vec![player_1, player_2],
             games_to_win: 3,
         };
         let response = Client::new()

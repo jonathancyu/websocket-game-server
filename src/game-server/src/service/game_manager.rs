@@ -19,7 +19,7 @@ use tokio::{
 use tower_http::trace::TraceLayer;
 use tracing::{debug, info, warn};
 
-use crate::model::internal::{GameRequest, PlayerHandle};
+use crate::model::internal::GameRequest;
 
 use super::game_thread::{GameConfiguration, GameThread};
 
@@ -101,7 +101,7 @@ impl GameManager {
 
     async fn route_request(state: Arc<Mutex<GameManagerState>>, request: GameRequest) {
         let state = state.lock().await;
-        let player_id = request.player.id.clone();
+        let player_id = request.player.id;
         // BUG: pick up here - game lookup from above isn't being updated when we try to access it
         // :(
         debug!("ETST: {:?}, {:?}", state.player_assignment, state.games);
@@ -160,15 +160,16 @@ impl GameManager {
         let [player_1, player_2] = request.players.as_slice() else {
             panic!("Expected 2 player IDs")
         };
+        let (player_1, player_2) = (*player_1, *player_2);
         // Check if players are already in a game
-        if state.player_assignment.contains_key(player_1)
-            || state.player_assignment.contains_key(player_2)
+        if state.player_assignment.contains_key(&player_1)
+            || state.player_assignment.contains_key(&player_2)
         {
             return (StatusCode::CONFLICT, "A player is already in a game").into_response();
         }
         // Create game config
         let configuration = GameConfiguration {
-            players: (player_1.clone(), player_2.clone()),
+            players: (player_1, player_2),
             games_to_win: request.games_to_win,
         };
 
@@ -177,21 +178,17 @@ impl GameManager {
         let (to_game, from_socket) = mpsc::channel(100); // TODO:
                                                          // what's the size here
         let game_handle = GameHandle {
-            id: game_id.clone(),
-            players: (player_1.clone(), player_2.clone()),
+            id: game_id,
+            players: (player_1, player_2),
             to_game,
         };
         state
             .games
-            .insert(game_id.clone(), Arc::new(Mutex::new(game_handle)));
+            .insert(game_id, Arc::new(Mutex::new(game_handle)));
 
         // Assign players to the game
-        state
-            .player_assignment
-            .insert(player_1.clone(), game_id.clone());
-        state
-            .player_assignment
-            .insert(player_2.clone(), game_id.clone());
+        state.player_assignment.insert(player_1, game_id);
+        state.player_assignment.insert(player_2, game_id);
 
         // Spawn game thread
         let thread_shutdown_receiver = state.shutdown_receiver.resubscribe();
@@ -219,7 +216,7 @@ impl GameManager {
             StatusCode::OK,
             Json(GetGameResponse {
                 game_id,
-                players: game.players.clone(),
+                players: game.players,
             }),
         )
             .into_response()

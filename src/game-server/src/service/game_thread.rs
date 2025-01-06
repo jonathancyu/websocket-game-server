@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    panic::PanicHookInfo,
-};
+use std::collections::{HashMap, HashSet};
 
 use common::model::messages::Id;
 use itertools::Itertools;
@@ -58,13 +55,13 @@ impl GameState {
     }
 
     pub async fn update(&mut self, request: GameRequest) {
-        let player_id = request.player.id.clone();
+        let player_id = request.player.id;
         match self.phase {
             GamePhase::WaitingForPlayers { ref connected } => {
                 let mut connected = connected.clone();
                 match request.request {
                     ClientRequest::JoinGame => {
-                        connected.insert(player_id.clone());
+                        connected.insert(player_id);
                         self.players.insert(player_id, Player::from(request.player));
                     }
                     _ => {
