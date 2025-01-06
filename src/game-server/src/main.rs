@@ -68,14 +68,14 @@ async fn serve(
 // https://github.com/tokio-rs/axum/blob/main/examples/reqwest-response/src/main.rs
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{collections::HashMap, fs};
 
     use common::{
         model::messages::{
             CreateGameRequest, CreateGameResponse, GetGameRequest, GetGameResponse, Id,
             SocketRequest,
         },
-        test::TestCase,
+        test::{ServerAddress, TestCase},
     };
     use futures_util::{SinkExt, StreamExt};
     use game_server::model::external::{ClientRequest, ClientResponse};
@@ -260,9 +260,24 @@ mod tests {
         let server = TestServer::new().await;
         let data_path = env!("CARGO_MANIFEST_DIR").to_string() + "/tests/data/full_game.json";
         let text = fs::read_to_string(data_path).expect("Unable to read file");
-        let test_case: TestCase<ClientRequest, ClientResponse> =
-            serde_json::from_str(&text).expect("Could not parse test case");
+        let test_case: TestCase<
+            ClientRequest,
+            ClientResponse,
+            CreateGameRequest,
+            CreateGameResponse,
+        > = serde_json::from_str(&text).expect("Could not parse test case");
+
         // TODO: how to emulate two different sockets?
-        test_case.run(url("ws", server.socket_address, "")).await;
+        let address_lookup = HashMap::from([
+            (
+                "game".to_string(),
+                ServerAddress::WebSocket(url("ws", server.socket_address, "")),
+            ),
+            (
+                "rest".to_string(),
+                ServerAddress::RestApi(url("http", server.manager_address.clone(), "")),
+            ),
+        ]);
+        test_case.run(address_lookup).await;
     }
 }

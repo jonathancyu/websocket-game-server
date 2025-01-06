@@ -1,19 +1,21 @@
 use std::{collections::HashMap, fmt::Debug, time::Duration};
 
 use futures_util::{
-    stream::{self, SplitSink, SplitStream},
+    stream::{SplitSink, SplitStream},
     SinkExt, StreamExt, TryStreamExt,
 };
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::{net::TcpStream, time::timeout};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
+use tracing::{debug, warn};
 
 use crate::model::messages::{SocketRequest, SocketResponse};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
-enum Event<RQ, RS>
+enum Event<RQ, RS, RestRq, RestRs>
 where
     RS: Serialize,
 {
@@ -25,14 +27,21 @@ where
         name: String,
         response: SocketResponse<RS>,
     },
+    Post {
+        name: String,
+        endpoint: String,
+        request: RestRq,
+        response_code: u16,
+        response: Option<RestRs>,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct TestCase<RQ, RS>
+pub struct TestCase<RQ, RS, RestRq, RestRs>
 where
     RS: Serialize,
 {
-    sequence: Vec<Event<RQ, RS>>,
+    sequence: Vec<Event<RQ, RS, RestRq, RestRs>>,
 }
 
 pub enum ServerAddress {
@@ -49,10 +58,13 @@ enum ServerHandle {
     RestApi(String),
 }
 
-impl<RQ, RS> TestCase<RQ, RS>
+// TODO: how to pass N generics?
+impl<RQ, RS, RestRq, RestRs> TestCase<RQ, RS, RestRq, RestRs>
 where
     RQ: Serialize,
     RS: Serialize + for<'de> Deserialize<'de> + Debug + PartialEq,
+    RestRq: Serialize + Debug,
+    RestRs: Serialize + for<'de> Deserialize<'de> + Debug + PartialEq,
 {
     pub async fn run(&self, address_lookup: HashMap<String, ServerAddress>) {
         let timeout_len = Duration::from_millis(500);
@@ -106,10 +118,6 @@ where
                     response: expected,
                 } => {
                     let handle = server_handles.get_mut(name).expect("Send socket not found");
-                    assert!(matches!(
-                        handle,
-                        ServerHandle::WebSocket { write: _, read: _ }
-                    ));
                     let ServerHandle::WebSocket {
                         write: _,
                         ref mut read,
@@ -129,6 +137,37 @@ where
                     )
                     .expect("Failed to deserialize response");
                     assert_eq!(expected, &response);
+                }
+                Event::Post {
+                    name,
+                    endpoint,
+                    request,
+                    response_code,
+                    response: expected_response,
+                } => {
+                    let handle = server_handles.get(name).expect("REST API not found");
+                    let ServerHandle::RestApi(address) = handle else {
+                        panic!("Expected REST API at {:?}, found websocket", name);
+                    };
+
+                    let url = address.to_owned() + endpoint;
+                    debug!("POSTing {:?} to {:?}", request, url);
+                    let response = Client::new()
+                        .post(address.to_owned() + endpoint)
+                        .json(&request)
+                        .send()
+                        .await
+                        .expect("Request failed");
+                    debug!("Status: {:?}", response.status());
+                    assert_eq!(*response_code, response.status().as_u16());
+                    match response.json::<RestRs>().await {
+                        Ok(body) => {
+                            debug!("Got response: {:?}", body)
+                        }
+                        Err(e) => {
+                            debug!("Failed to deserialize response: {:?}", e);
+                        }
+                    }
                 }
             }
         }
