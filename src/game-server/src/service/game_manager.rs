@@ -17,7 +17,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tower_http::trace::TraceLayer;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::model::internal::{GameRequest, Player};
 
@@ -102,6 +102,9 @@ impl GameManager {
     async fn route_request(state: Arc<Mutex<GameManagerState>>, request: GameRequest) {
         let state = state.lock().await;
         let player_id = request.player.id.clone();
+        // BUG: pick up here - game lookup from above isn't being updated when we try to access it
+        // :(
+        debug!("ETST: {:?}, {:?}", state.player_assignment, state.games);
         match state.games.get(&player_id) {
             Some(game) => {
                 let game = game.lock().await;
@@ -112,7 +115,7 @@ impl GameManager {
                     )
                 });
             }
-            None => warn!("No game for player {:?}", player_id),
+            None => warn!("No game found for player {:?}", player_id),
         };
     }
 
@@ -170,17 +173,25 @@ impl GameManager {
         };
 
         // Insert new game
-        let id = Id::new();
+        let game_id = Id::new();
         let (to_game, from_socket) = mpsc::channel(100); // TODO:
                                                          // what's the size here
         let game_handle = GameHandle {
-            id: id.clone(),
+            id: game_id.clone(),
             players: (player_1.clone(), player_2.clone()),
             to_game,
         };
         state
             .games
-            .insert(id.clone(), Arc::new(Mutex::new(game_handle)));
+            .insert(game_id.clone(), Arc::new(Mutex::new(game_handle)));
+
+        // Assign players to the game
+        state
+            .player_assignment
+            .insert(player_1.clone(), game_id.clone());
+        state
+            .player_assignment
+            .insert(player_2.clone(), game_id.clone());
 
         // Spawn game thread
         let thread_shutdown_receiver = state.shutdown_receiver.resubscribe();
@@ -191,11 +202,7 @@ impl GameManager {
         ))
         .await
         .expect("Failed to spawn game thread");
-        (
-            StatusCode::CREATED,
-            Json(CreateGameResponse { game_id: id }),
-        )
-            .into_response()
+        (StatusCode::CREATED, Json(CreateGameResponse { game_id })).into_response()
     }
 
     async fn get_game(
