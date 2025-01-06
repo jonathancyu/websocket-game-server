@@ -75,7 +75,7 @@ mod tests {
             CreateGameRequest, CreateGameResponse, GetGameRequest, GetGameResponse, Id,
             SocketRequest,
         },
-        websocket::test::TestCase,
+        test::TestCase,
     };
     use futures_util::{SinkExt, StreamExt};
     use game_server::model::external::{ClientRequest, ClientResponse};
