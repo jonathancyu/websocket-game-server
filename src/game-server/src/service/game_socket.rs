@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::model::{
     external::{ClientRequest, ClientResponse},
-    internal::{GameRequest, Player},
+    internal::{GameRequest, PlayerHandle},
 };
 use async_trait::async_trait;
 use common::websocket::{Connection, WebSocketState, WebsocketHandler};
@@ -37,7 +37,7 @@ impl WebsocketHandler<ClientRequest, ClientResponse, GameRequest> for GameSocket
     ) -> Option<ClientResponse> {
         // Resolve player object and route to game manager
         let request = GameRequest {
-            player: Player {
+            player: PlayerHandle {
                 id: connection.user_id,
                 sender: connection.to_socket.sender.clone(),
             },

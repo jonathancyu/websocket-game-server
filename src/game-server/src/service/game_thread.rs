@@ -5,12 +5,15 @@ use std::{
 
 use common::model::messages::Id;
 use itertools::Itertools;
-use tokio::sync::{broadcast, mpsc::Receiver};
+use tokio::sync::{
+    broadcast,
+    mpsc::{self, Receiver},
+};
 use tracing::{debug, warn};
 
 use crate::model::{
     external::{ClientRequest, ClientResponse},
-    internal::{GameRequest, Move, Player},
+    internal::{self, GameRequest, Move, PlayerHandle, RoundResult},
 };
 
 #[derive(Clone)]
@@ -19,10 +22,25 @@ pub struct GameConfiguration {
     pub games_to_win: u8,
 }
 
+struct Player {
+    pub id: Id,
+    pub sender: mpsc::Sender<ClientResponse>,
+    pub wins: u8,
+}
+
+impl Player {
+    pub fn from(handle: PlayerHandle) -> Self {
+        Player {
+            id: handle.id,
+            sender: handle.sender,
+            wins: 0,
+        }
+    }
+}
+
 struct GameState {
     phase: GamePhase,
     configuration: GameConfiguration,
-    wins: (u8, u8),
     rounds_played: u8,
     players: HashMap<Id, Player>,
 }
@@ -34,15 +52,9 @@ impl GameState {
                 connected: HashSet::new(),
             },
             configuration,
-            wins: (0, 0),
             rounds_played: 0,
             players: HashMap::new(),
         }
-    }
-
-    pub fn with_phase(&mut self, phase: GamePhase) -> &mut Self {
-        self.phase = phase;
-        self
     }
 
     pub async fn update(&mut self, request: GameRequest) {
@@ -53,7 +65,7 @@ impl GameState {
                 match request.request {
                     ClientRequest::JoinGame => {
                         connected.insert(player_id.clone());
-                        self.players.insert(player_id, request.player);
+                        self.players.insert(player_id, Player::from(request.player));
                     }
                     _ => {
                         warn!("Got non-JoinGame message in WaitingForPlayers phase");
@@ -63,8 +75,12 @@ impl GameState {
                 if connected.len() == 2 {
                     // Players are ready, prompt for moves
                     debug!("All players connected, notifying.");
-                    for player in self.players.values().into_iter() {
-                        player.sender.send(ClientResponse::PendingMove).await;
+                    for player in self.players.values() {
+                        player
+                            .sender
+                            .send(ClientResponse::PendingMove)
+                            .await
+                            .expect("Failed to send message to player");
                     }
                 }
                 self.phase = GamePhase::WaitingForPlayers { connected };
@@ -96,22 +112,19 @@ impl GameState {
                     .collect_tuple()
                     .expect("Expected two player-move pairs");
                 // Update self
-                let (id_1, id_2) = (player_1.0, player_2.0);
                 match Self::get_winner(player_1, player_2) {
-                    Some(winner) => {
-                        let (mut w1, mut w2) = self.wins;
-                        if &winner == id_1 {
-                            w1 += 1;
-                        } else if &winner == id_2 {
-                            w2 += 1
-                        } else {
-                            todo!("This shouldn't compile");
-                        }
-                        self.phase = GamePhase::PendingMoves {
-                            moves: HashMap::new(),
-                        };
-                        self.wins = (w1, w2);
+                    Some(winner_id) => {
+                        let winner = self.players.get_mut(&winner_id).expect("Winner not found");
+                        winner.wins += 1;
                         self.rounds_played += 1;
+
+                        let config = self.configuration.clone();
+                        if winner.wins >= config.games_to_win {
+                            self.notify_match_result(winner_id).await;
+                            self.phase = GamePhase::Done;
+                        } else {
+                            self.notify_round_result(winner_id, moves).await;
+                        }
                     }
                     None => {
                         self.rounds_played += 1;
@@ -121,7 +134,55 @@ impl GameState {
                     moves: HashMap::new(),
                 };
             }
-            GamePhase::Done => todo!(), // TODO: impl
+            GamePhase::Done => {
+                warn!(
+                    "Got request {:?} even though game is in Done state",
+                    request
+                );
+            }
+        }
+    }
+
+    async fn notify_round_result(&self, winner: Id, moves: HashMap<Id, Move>) {
+        for player in self.players.values() {
+            let other_move = moves
+                .iter()
+                .find(|(id, _)| **id != player.id)
+                .map(|(_, mv)| mv)
+                .expect("Other player's move not found")
+                .clone();
+
+            player
+                .sender
+                .send(match player.id == winner {
+                    true => ClientResponse::RoundResult(RoundResult {
+                        result: internal::Result::Win,
+                        other_move,
+                    }),
+                    false => ClientResponse::RoundResult(RoundResult {
+                        result: internal::Result::Loss,
+                        other_move,
+                    }),
+                })
+                .await
+                .expect("Failed to notify round result");
+        }
+    }
+    async fn notify_match_result(&self, winner: Id) {
+        for player in self.players.values() {
+            let result = match player.id == winner {
+                true => internal::Result::Win,
+                false => internal::Result::Loss,
+            };
+            player
+                .sender
+                .send(ClientResponse::MatchResult {
+                    result,
+                    wins: player.wins,
+                    total: self.rounds_played,
+                })
+                .await
+                .expect("Failed to notify round result");
         }
     }
 
@@ -131,9 +192,9 @@ impl GameState {
         match move1.beats(move2) {
             Some(player1_wins) => {
                 if player1_wins {
-                    Some(id1.clone())
+                    Some(*id1)
                 } else {
-                    Some(id2.clone())
+                    Some(*id2)
                 }
             }
             None => None,

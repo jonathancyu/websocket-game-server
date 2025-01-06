@@ -19,7 +19,7 @@ use tokio::{
 use tower_http::trace::TraceLayer;
 use tracing::{debug, info, warn};
 
-use crate::model::internal::{GameRequest, Player};
+use crate::model::internal::{GameRequest, PlayerHandle};
 
 use super::game_thread::{GameConfiguration, GameThread};
 

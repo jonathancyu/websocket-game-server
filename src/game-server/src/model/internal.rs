@@ -7,7 +7,7 @@ use super::external::{ClientRequest, ClientResponse};
 
 // Types
 #[derive(Clone, Debug)]
-pub struct Player {
+pub struct PlayerHandle {
     pub id: Id,
     pub sender: Sender<ClientResponse>,
 }
@@ -49,6 +49,6 @@ pub struct RoundResult {
 // Messages
 #[derive(Debug, Clone)]
 pub struct GameRequest {
-    pub player: Player,
+    pub player: PlayerHandle,
     pub request: ClientRequest,
 }
