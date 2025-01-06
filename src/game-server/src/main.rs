@@ -58,6 +58,9 @@ async fn serve(
     manager_handle
         .await
         .expect("Game manager exited non-gracefully");
+    websocket_handle
+        .await
+        .expect("Websocket exited non-gracefully");
 }
 
 /// TODO: Does this belong in tests/?

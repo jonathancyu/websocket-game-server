@@ -8,10 +8,13 @@ use axum::{
     Json, Router,
 };
 use common::model::messages::{CreateGameRequest, CreateGameResponse, GetGameResponse, Id};
-use tokio::sync::{
-    broadcast,
-    mpsc::{self, Receiver},
-    Mutex,
+use tokio::{
+    sync::{
+        broadcast,
+        mpsc::{self, Receiver},
+        Mutex,
+    },
+    task::JoinHandle,
 };
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
@@ -45,27 +48,43 @@ impl GameManager {
         shutdown_receiver: &mut broadcast::Receiver<()>,
         from_socket: Receiver<GameRequest>,
     ) {
-        let mut shutdown_receiver = shutdown_receiver.resubscribe();
+        let shutdown_receiver = shutdown_receiver.resubscribe();
         let state = Arc::new(Mutex::new(GameManagerState {
             games: HashMap::new(),
             player_assignment: HashMap::new(),
             shutdown_receiver: shutdown_receiver.resubscribe(),
         }));
-        // Serve REST endpoint
-        self.serve_rest_endpoint(address, state.clone(), shutdown_receiver.resubscribe())
-            .await;
-
-        // Spawn main thread to route game messages to game threads
-        Self::game_router_thread(state.clone(), &mut shutdown_receiver, from_socket).await;
         // TODO: some sort of collector to cleanup dead games? or threads clean themselves
+
+        // Serve REST endpoint
+        let rest_state = state.clone(); // TODO: I really want to not have to manually clone these
+                                        // before moving :(
+        let rest_shutdown_receiver = shutdown_receiver.resubscribe();
+        let rest_handle: JoinHandle<()> = tokio::spawn(async move {
+            Self::serve_rest_endpoint(address, rest_state, rest_shutdown_receiver).await
+        });
+
+        // Spawn thread to route game messages to game threads
+        let router_shutdown_receiver = shutdown_receiver.resubscribe();
+        let router_handle: JoinHandle<()> = tokio::spawn(async move {
+            Self::game_router_thread(state.clone(), router_shutdown_receiver, from_socket).await;
+        });
+
+        rest_handle
+            .await
+            .expect("REST endpoint exited non-gracefully");
+        router_handle
+            .await
+            .expect("REST endpoint exited non-gracefully");
     }
 
     // Game logic loop
     async fn game_router_thread(
         state: Arc<Mutex<GameManagerState>>,
-        shutdown_receiver: &mut broadcast::Receiver<()>,
+        mut shutdown_receiver: broadcast::Receiver<()>,
         mut from_socket: Receiver<GameRequest>,
     ) {
+        info!("Game router thread started");
         loop {
             tokio::select! {
                 result = from_socket.recv() => {
@@ -99,7 +118,6 @@ impl GameManager {
 
     // REST functions
     async fn serve_rest_endpoint(
-        &self,
         address: String,
         state: Arc<Mutex<GameManagerState>>,
         mut shutdown_receiver: broadcast::Receiver<()>,
@@ -198,5 +216,11 @@ impl GameManager {
             }),
         )
             .into_response()
+    }
+}
+
+impl Default for GameManager {
+    fn default() -> Self {
+        Self::new()
     }
 }

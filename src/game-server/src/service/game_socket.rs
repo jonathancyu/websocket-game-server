@@ -7,6 +7,7 @@ use crate::model::{
 use async_trait::async_trait;
 use common::websocket::{Connection, WebSocketState, WebsocketHandler};
 use tokio::sync::{mpsc::Sender, Mutex};
+use tracing::debug;
 pub struct GameSocket {
     state: Arc<Mutex<WebSocketState<ClientResponse>>>,
 }
@@ -35,14 +36,16 @@ impl WebsocketHandler<ClientRequest, ClientResponse, GameRequest> for GameSocket
         internal_sender: Sender<GameRequest>,
     ) -> Option<ClientResponse> {
         // Resolve player object and route to game manager
+        let request = GameRequest {
+            player: Player {
+                id: connection.user_id,
+                sender: connection.to_socket.sender.clone(),
+            },
+            request,
+        };
+        debug!("Sending request to thread: {:?}", request);
         internal_sender
-            .send(GameRequest {
-                player: Player {
-                    id: connection.user_id,
-                    sender: connection.to_socket.sender.clone(),
-                },
-                request,
-            })
+            .send(request)
             .await
             .expect("Failed to send internal message");
         None
