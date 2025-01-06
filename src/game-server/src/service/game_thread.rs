@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    panic::PanicHookInfo,
+};
 
 use common::model::messages::Id;
 use itertools::Itertools;
@@ -10,113 +13,81 @@ use crate::model::{
     internal::{GameRequest, Move, Player},
 };
 
+#[derive(Clone)]
 pub struct GameConfiguration {
-    players: HashMap<Id, Player>,
-    games_to_win: u8,
+    pub players: (Id, Id),
+    pub games_to_win: u8,
 }
 
 struct GameState {
     phase: GamePhase,
+    configuration: GameConfiguration,
     wins: (u8, u8),
     rounds_played: u8,
+    players: HashMap<Id, Player>,
 }
 
 impl GameState {
-    pub fn new() -> Self {
+    pub fn new(configuration: GameConfiguration) -> Self {
         GameState {
             phase: GamePhase::WaitingForPlayers {
                 connected: HashSet::new(),
             },
+            configuration,
             wins: (0, 0),
             rounds_played: 0,
+            players: HashMap::new(),
         }
     }
 
-    pub fn with_phase(&self, phase: GamePhase) -> Self {
-        GameState {
-            phase,
-            wins: self.wins,
-            rounds_played: self.rounds_played,
-        }
-    }
-}
-
-enum GamePhase {
-    WaitingForPlayers { connected: HashSet<Id> },
-    PendingMoves { moves: HashMap<Id, Move> },
-    Done,
-}
-
-struct GameThread {}
-impl GameThread {
-    async fn game_thread(
-        configuration: GameConfiguration,
-        shutdown_receiver: &mut broadcast::Receiver<()>,
-        mut from_socket: Receiver<GameRequest>,
-    ) {
-        let mut state = GameState::new();
-        loop {
-            tokio::select! {
-                request = from_socket.recv() => {
-                    if let Some(request) = request {
-                        state = Self::update(&configuration, state, request).await;
-                    }
-                    if matches!(state.phase, GamePhase::Done) {
-                        break;
-                    }
-                }
-                _ = shutdown_receiver.recv() => {
-                    break;
-                }
-            }
-        }
+    pub fn with_phase(&mut self, phase: GamePhase) -> &mut Self {
+        self.phase = phase;
+        self
     }
 
-    async fn update(
-        configuration: &GameConfiguration,
-        state: GameState,
-        request: GameRequest,
-    ) -> GameState {
-        let player_id = request.player.id;
-        match state.phase {
+    pub async fn update(&mut self, request: GameRequest) {
+        let player_id = request.player.id.clone();
+        match self.phase {
             GamePhase::WaitingForPlayers { ref connected } => {
                 let mut connected = connected.clone();
                 match request.request {
                     ClientRequest::JoinGame => {
-                        connected.insert(player_id);
+                        connected.insert(player_id.clone());
+                        self.players.insert(player_id, request.player);
                     }
                     _ => {
                         warn!("Got non-JoinGame message in WaitingForPlayers phase");
-                        return state;
+                        return;
                     }
                 }
                 if connected.len() == 2 {
                     // Players are ready, prompt for moves
                     debug!("All players connected, notifying.");
-                    for player in configuration.players.values().into_iter() {
+                    for player in self.players.values().into_iter() {
                         player.sender.send(ClientResponse::PendingMove).await;
                     }
                 }
-                return state.with_phase(GamePhase::WaitingForPlayers { connected });
+                self.phase = GamePhase::WaitingForPlayers { connected };
             }
             GamePhase::PendingMoves { ref moves } => {
                 let mut moves = moves.clone();
                 let ClientRequest::Move { value } = request.request else {
                     warn!("Got non-Move message in PendingMoves phase");
-                    return state;
+                    return;
                 };
                 if moves.contains_key(&player_id) {
                     warn!(
                         "Player {} submitted a move but already has a move present.",
                         player_id
                     );
-                    return state;
+                    return;
                 }
 
                 // Apply player's move
                 moves.insert(player_id, value);
                 if moves.len() < 2 {
-                    return state.with_phase(GamePhase::PendingMoves { moves });
+                    self.phase = GamePhase::PendingMoves { moves };
+                    return;
                 }
 
                 // Evaluate game result
@@ -124,11 +95,11 @@ impl GameThread {
                     .iter()
                     .collect_tuple()
                     .expect("Expected two player-move pairs");
-                // Update state
+                // Update self
                 let (id_1, id_2) = (player_1.0, player_2.0);
-                let state = match Self::get_winner(player_1, player_2) {
+                match Self::get_winner(player_1, player_2) {
                     Some(winner) => {
-                        let (mut w1, mut w2) = state.wins;
+                        let (mut w1, mut w2) = self.wins;
                         if &winner == id_1 {
                             w1 += 1;
                         } else if &winner == id_2 {
@@ -136,23 +107,19 @@ impl GameThread {
                         } else {
                             todo!("This shouldn't compile");
                         }
-                        GameState {
-                            phase: GamePhase::PendingMoves {
-                                moves: HashMap::new(),
-                            },
-                            wins: (w1, w2),
-                            rounds_played: state.rounds_played + 1,
-                        }
-                    }
-                    None => GameState {
-                        phase: GamePhase::PendingMoves {
+                        self.phase = GamePhase::PendingMoves {
                             moves: HashMap::new(),
-                        },
-                        wins: state.wins,
-                        rounds_played: state.rounds_played + 1,
-                    },
+                        };
+                        self.wins = (w1, w2);
+                        self.rounds_played += 1;
+                    }
+                    None => {
+                        self.rounds_played += 1;
+                    }
                 };
-                return state;
+                self.phase = GamePhase::PendingMoves {
+                    moves: HashMap::new(),
+                };
             }
             GamePhase::Done => todo!(), // TODO: impl
         }
@@ -170,6 +137,40 @@ impl GameThread {
                 }
             }
             None => None,
+        }
+    }
+}
+
+enum GamePhase {
+    WaitingForPlayers { connected: HashSet<Id> },
+    PendingMoves { moves: HashMap<Id, Move> },
+    Done,
+}
+
+pub struct GameThread {}
+impl GameThread {
+    pub async fn thread_loop(
+        configuration: GameConfiguration,
+        shutdown_receiver: broadcast::Receiver<()>,
+        mut from_socket: Receiver<GameRequest>,
+    ) {
+        debug!("Starting thread for game {:?}", configuration.players);
+        let mut state = GameState::new(configuration.clone());
+        let mut shutdown_receiver = shutdown_receiver.resubscribe();
+        loop {
+            tokio::select! {
+                request = from_socket.recv() => {
+                    if let Some(request) = request {
+                        state.update(request).await;
+                    }
+                    if matches!(state.phase, GamePhase::Done) {
+                        break;
+                    }
+                }
+                _ = shutdown_receiver.recv() => {
+                    break;
+                }
+            }
         }
     }
 }

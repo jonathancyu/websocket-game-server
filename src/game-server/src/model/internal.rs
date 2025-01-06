@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use super::external::{ClientRequest, ClientResponse};
 
 // Types
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Player {
     pub id: Id,
     pub sender: Sender<ClientResponse>,

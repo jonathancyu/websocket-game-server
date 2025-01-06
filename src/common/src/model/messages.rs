@@ -66,6 +66,7 @@ where
 #[derive(Serialize, Deserialize)]
 pub struct CreateGameRequest {
     pub players: Vec<Id>, // TODO: into tuple
+    pub games_to_win: u8,
 }
 
 #[derive(Serialize, Deserialize)]

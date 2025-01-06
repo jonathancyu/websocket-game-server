@@ -216,7 +216,6 @@ where
         let request: SocketRequest<ExternalRQ> =
             serde_json::from_str(body).expect("Could not deserialize request.");
 
-        debug!("Got message {:?}", &message);
         let response = Self::respond_to_request(connection.clone(), request.body, mm_sender).await;
 
         Ok(response.map(|body| SocketResponse {
@@ -249,9 +248,9 @@ where
 
     // Logic to handle a client's request
     async fn respond_to_request(
-        connection: Connection<ExternalRS>,
-        request: ExternalRQ,
-        internal_sender: Sender<InternalRQ>,
+        _connection: Connection<ExternalRS>,
+        _request: ExternalRQ,
+        _internal_sender: Sender<InternalRQ>,
     ) -> Option<ExternalRS> {
         None
     }

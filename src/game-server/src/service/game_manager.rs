@@ -4,12 +4,10 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post}, Json, Router,
+    routing::{get, post},
+    Json, Router,
 };
-use common::{
-    model::messages::{CreateGameRequest, CreateGameResponse, GetGameResponse, Id},
-    utility::Channel,
-};
+use common::model::messages::{CreateGameRequest, CreateGameResponse, GetGameResponse, Id};
 use tokio::sync::{
     broadcast,
     mpsc::{self, Receiver},
@@ -18,18 +16,21 @@ use tokio::sync::{
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
-use crate::model::internal::GameRequest;
+use crate::model::internal::{GameRequest, Player};
+
+use super::game_thread::{GameConfiguration, GameThread};
 
 #[derive(Debug)]
-struct Game {
+struct GameHandle {
     id: Id,
     players: (Id, Id),
     to_game: mpsc::Sender<GameRequest>,
 }
 
 struct GameManagerState {
-    pub games: HashMap<Id, Arc<Mutex<Game>>>,
-    pub player_assignment: HashMap<Id, Id>,
+    games: HashMap<Id, Arc<Mutex<GameHandle>>>,
+    player_assignment: HashMap<Id, Id>,
+    shutdown_receiver: broadcast::Receiver<()>,
 }
 pub struct GameManager {}
 
@@ -39,22 +40,23 @@ impl GameManager {
     }
 
     pub async fn listen(
-        &mut self,
+        &self,
         address: String,
         shutdown_receiver: &mut broadcast::Receiver<()>,
         from_socket: Receiver<GameRequest>,
     ) {
+        let mut shutdown_receiver = shutdown_receiver.resubscribe();
         let state = Arc::new(Mutex::new(GameManagerState {
             games: HashMap::new(),
             player_assignment: HashMap::new(),
+            shutdown_receiver: shutdown_receiver.resubscribe(),
         }));
         // Serve REST endpoint
-        let rest_shutdown = shutdown_receiver.resubscribe();
-        self.serve_rest_endpoint(address, state.clone(), rest_shutdown)
+        self.serve_rest_endpoint(address, state.clone(), shutdown_receiver.resubscribe())
             .await;
 
         // Spawn main thread to route game messages to game threads
-        Self::game_router_thread(state.clone(), shutdown_receiver, from_socket).await;
+        Self::game_router_thread(state.clone(), &mut shutdown_receiver, from_socket).await;
         // TODO: some sort of collector to cleanup dead games? or threads clean themselves
     }
 
@@ -67,11 +69,8 @@ impl GameManager {
         loop {
             tokio::select! {
                 result = from_socket.recv() => {
-                    match result {
-                        Some(request) => {
-                            Self::route_request(state.clone(), request).await;
-                        },
-                        _ => {}
+                    if let Some(request) = result {
+                        Self::route_request(state.clone(), request).await;
                     }
                 },
                 _ = shutdown_receiver.recv() => {
@@ -87,13 +86,16 @@ impl GameManager {
         match state.games.get(&player_id) {
             Some(game) => {
                 let game = game.lock().await;
-                game.to_game.send(request);
+                game.to_game.send(request).await.unwrap_or_else(|_| {
+                    panic!(
+                        "Failed to route request to game for player {:?}, game {:?}",
+                        player_id, game.id
+                    )
+                });
             }
             None => warn!("No game for player {:?}", player_id),
         };
     }
-
-    // Game logic
 
     // REST functions
     async fn serve_rest_endpoint(
@@ -143,18 +145,34 @@ impl GameManager {
         {
             return (StatusCode::CONFLICT, "A player is already in a game").into_response();
         }
+        // Create game config
+        let configuration = GameConfiguration {
+            players: (player_1.clone(), player_2.clone()),
+            games_to_win: request.games_to_win,
+        };
 
         // Insert new game
         let id = Id::new();
-        let channel = Channel::<GameRequest>::from(mpsc::channel(100)); // TODO:
-                                                                        // what's the size here
-        let game = Game {
+        let (to_game, from_socket) = mpsc::channel(100); // TODO:
+                                                         // what's the size here
+        let game_handle = GameHandle {
             id: id.clone(),
             players: (player_1.clone(), player_2.clone()),
-            to_game: channel.sender,
+            to_game,
         };
-        state.games.insert(id.clone(), Arc::new(Mutex::new(game)));
+        state
+            .games
+            .insert(id.clone(), Arc::new(Mutex::new(game_handle)));
 
+        // Spawn game thread
+        let thread_shutdown_receiver = state.shutdown_receiver.resubscribe();
+        tokio::spawn(GameThread::thread_loop(
+            configuration,
+            thread_shutdown_receiver.resubscribe(),
+            from_socket,
+        ))
+        .await
+        .expect("Failed to spawn game thread");
         (
             StatusCode::CREATED,
             Json(CreateGameResponse { game_id: id }),
@@ -180,11 +198,5 @@ impl GameManager {
             }),
         )
             .into_response()
-    }
-}
-
-impl Default for GameManager {
-    fn default() -> Self {
-        Self::new()
     }
 }

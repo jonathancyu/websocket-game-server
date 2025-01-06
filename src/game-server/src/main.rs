@@ -175,6 +175,7 @@ mod tests {
         // POST game
         let request = CreateGameRequest {
             players: vec![Id::new(), Id::new()],
+            games_to_win: 3,
         };
         let client = Client::new();
         let response = client
@@ -225,6 +226,7 @@ mod tests {
         let player_2 = Id::new();
         let request = CreateGameRequest {
             players: vec![player_1.clone(), player_2.clone()],
+            games_to_win: 3,
         };
         let response = Client::new()
             .post(url("http", server.manager_address.clone(), "create_game"))
