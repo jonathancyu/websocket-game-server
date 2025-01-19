@@ -70,8 +70,12 @@ where
     RestRq: Serialize + for<'de> Deserialize<'de> + Debug,
     RestRs: Serialize + for<'de> Deserialize<'de> + Debug + PartialEq,
 {
-    pub fn load(file_path: String) -> Self {
-        let text = fs::read_to_string(file_path).expect("Unable to read file");
+    pub fn load(file_path: String, replacements: Vec<(impl ToString, impl ToString)>) -> Self {
+        let mut text = fs::read_to_string(file_path).expect("Unable to read file");
+        for (from, to) in replacements {
+            let from = &format!("${{{}}}", from.to_string());
+            text = text.replace(from, &to.to_string());
+        }
         let test_case: Self = serde_json::from_str(&text).expect("Could not parse test case");
         test_case
     }

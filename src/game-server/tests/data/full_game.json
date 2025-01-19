@@ -6,8 +6,8 @@
       "endpoint": "create_game",
       "request": {
         "players": [
-          "83445375-242f-41b4-898b-d01237dad5c6",
-          "f177a23d-e0b6-4ba8-b70e-53eaba84473c"
+          "${user1}",
+          "${user2}"
         ],
         "games_to_win": 1
       },
@@ -16,13 +16,13 @@
     {
       "type": "SocketOpen",
       "name": "user1",
-      "user_id": "f177a23d-e0b6-4ba8-b70e-53eaba84473c"
+      "user_id": "${user1}"
     },
     {
       "type": "SocketSend",
       "name": "user1",
       "request": {
-        "user_id": "f177a23d-e0b6-4ba8-b70e-53eaba84473c",
+        "user_id": "${user1}",
         "body": {
           "type": "JoinGame"
         }
@@ -32,7 +32,7 @@
       "type": "SocketReceive",
       "name": "user1",
       "response": {
-        "user_id": "f177a23d-e0b6-4ba8-b70e-53eaba84473c",
+        "user_id": "${user1}",
         "body": {
           "type": "GameJoined"
         }
@@ -41,13 +41,13 @@
     {
       "type": "SocketOpen",
       "name": "user2",
-      "user_id": "83445375-242f-41b4-898b-d01237dad5c6"
+      "user_id": "${user2}"
     },
     {
       "type": "SocketSend",
       "name": "user2",
       "request": {
-        "user_id": "83445375-242f-41b4-898b-d01237dad5c6",
+        "user_id": "${user2}",
         "body": {
           "type": "JoinGame"
         }
@@ -57,7 +57,7 @@
       "type": "SocketReceive",
       "name": "user2",
       "response": {
-        "user_id": "83445375-242f-41b4-898b-d01237dad5c6",
+        "user_id": "${user2}",
         "body": {
           "type": "GameJoined"
         }
@@ -67,7 +67,7 @@
       "type": "SocketReceive",
       "name": "user1",
       "response": {
-        "user_id": "f177a23d-e0b6-4ba8-b70e-53eaba84473c",
+        "user_id": "${user1}",
         "body": {
           "type": "PendingMove"
         }
@@ -77,7 +77,7 @@
       "type": "SocketReceive",
       "name": "user2",
       "response": {
-        "user_id": "83445375-242f-41b4-898b-d01237dad5c6",
+        "user_id": "${user2}",
         "body": {
           "type": "PendingMove"
         }

@@ -259,9 +259,12 @@ mod tests {
     async fn run_game() {
         let server = TestServer::new().await;
         let file_path = env!("CARGO_MANIFEST_DIR").to_string() + "/tests/data/full_game.json";
+        let ids = [Id::new(), Id::new()];
+        let replacements = vec![("user1", ids[0]), ("user2", ids[1])];
         let test_case =
             TestCase::<ClientRequest, ClientResponse, CreateGameRequest, CreateGameResponse>::load(
                 file_path,
+                replacements,
             );
 
         let address_lookup = HashMap::from([
