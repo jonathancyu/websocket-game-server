@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, time::Duration};
+use std::net::SocketAddr;
 
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
@@ -9,7 +9,6 @@ use tokio::{
         broadcast,
         mpsc::{self, Sender},
     },
-    time,
 };
 use tokio_tungstenite::{
     accept_async,
@@ -132,20 +131,18 @@ where
         let (to_user_sender, mut to_user_receiver) = mpsc::channel::<ExternalRS>(100);
 
         debug!("Listening to {:?}", user_id);
-        let mut interval = time::interval(Duration::from_millis(50));
         loop {
             let mut close_socket = false;
             tokio::select! {
                 // Poll connection for any push messages
-                _ = interval.tick() => {
-                    let response = Self::handle_internal_message(user_id, &mut to_user_receiver).await;
-                    if let Some(response) = response {
-                        let response_body = serde_json::to_string(&response).expect("Could not serialize response.");
-                        ws_sender.send(Message::Text(response_body)).await.unwrap();
+                msg = to_user_receiver.recv() => {
+                    let Some(msg) = msg else { continue };
+                    let Some(response) =Self::handle_internal_message(user_id, msg).await else { return };
+                    let response_body = serde_json::to_string(&response).expect("Could not serialize response.");
+                    ws_sender.send(Message::Text(response_body)).await.unwrap();
 
-                        // Drop connection according to criteria
-                        close_socket |= Self::drop_after_send(response.body);
-                    }
+                    // Drop connection according to criteria
+                    close_socket |= Self::drop_after_send(response.body);
                 }
 
                 // Otherwise, handle incoming messages
@@ -164,17 +161,12 @@ where
                         mm_sender.clone()
                     ).await;
 
-                    let Ok(response) = result else {
-                        break
-                    };
+                    let Ok(Some(response)) = result else { continue };
+                    let response_body = serde_json::to_string(&response).expect("Could not serialize response.");
+                    ws_sender.send(Message::Text(response_body)).await.unwrap();
 
-                    if let Some(response) = response {
-                        let response_body = serde_json::to_string(&response).expect("Could not serialize response.");
-                        ws_sender.send(Message::Text(response_body)).await.unwrap();
-
-                        // Drop connection according to criteria
-                        close_socket |= Self::drop_after_send(response.body);
-                    }
+                    // Drop connection according to criteria
+                    close_socket |= Self::drop_after_send(response.body);
                 }
             };
             if close_socket {
@@ -213,13 +205,10 @@ where
     // Read internal message to potentially forward to the user.
     async fn handle_internal_message(
         user_id: Id,
-        receiver: &mut mpsc::Receiver<ExternalRS>,
+        body: ExternalRS,
     ) -> Option<SocketResponse<ExternalRS>> {
         // If message was sent, forward to user
-        match receiver.try_recv() {
-            Ok(body) => Some(SocketResponse { user_id, body }),
-            Err(_) => None,
-        }
+        Some(SocketResponse { user_id, body })
     }
 
     // Criterion to drop connection. By default, always keep the connection alive.
