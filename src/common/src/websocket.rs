@@ -19,8 +19,7 @@ use tokio_tungstenite::{
         Message,
     },
 };
-use tracing::{debug, error, field::debug, info, warn};
-use uuid::Uuid;
+use tracing::{debug, error, info, warn};
 
 use crate::{
     model::messages::{Id, OpenSocketRequest, SocketRequest, SocketResponse},
@@ -44,29 +43,6 @@ where
     }
 }
 
-pub struct WebSocketState<T: Clone> {
-    user_handles: HashMap<Id, Connection<T>>,
-}
-impl<T> WebSocketState<T>
-where
-    T: Clone,
-{
-    pub fn new() -> Self {
-        WebSocketState {
-            user_handles: HashMap::new(),
-        }
-    }
-}
-
-impl<T> Default for WebSocketState<T>
-where
-    T: Clone,
-{
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[async_trait]
 pub trait WebsocketHandler<ExternalRQ, ExternalRS, InternalRQ>
 where
@@ -75,8 +51,6 @@ where
     ExternalRS: Clone + Send + Serialize + 'static,
     InternalRQ: Clone + Send + 'static,
 {
-    fn get_state(&self) -> Arc<Mutex<WebSocketState<ExternalRS>>>;
-
     async fn listen(
         &mut self,
         address: String,
@@ -98,7 +72,6 @@ where
                         }
                         Ok((stream, address)) => {
                             tokio::spawn(Self::connection_thread(
-                                self.get_state(),
                                 stream,
                                 address,
                                 mm_sender.clone(),
@@ -116,7 +89,6 @@ where
 
     // Thread to handle connection lifetime
     async fn connection_thread(
-        state: Arc<Mutex<WebSocketState<ExternalRS>>>,
         stream: TcpStream,
         address: SocketAddr,
         mm_sender: Sender<InternalRQ>,
@@ -154,21 +126,11 @@ where
                 }
             }
         }
-        // TODO: how to make this guaranteed at compile time?
+
         let user_id = user_id.expect("UserID can't be null at this point, right..?");
 
         // Lookup user's Connection by user_id
-        let connection = {
-            // Acquire state mutex in limited scope so we don't deadlock for the lifetime of the
-            // connection
-            state
-                .lock()
-                .await
-                .user_handles
-                .entry(user_id)
-                .or_insert_with(|| Connection::new(user_id, Channel::from(mpsc::channel(100))))
-                .clone()
-        };
+        let (to_user_sender, mut to_user_receiver) = mpsc::channel::<ExternalRS>(100);
 
         debug!("Listening to {:?}", user_id);
         let mut interval = time::interval(Duration::from_millis(50));
@@ -177,7 +139,7 @@ where
             tokio::select! {
                 // Poll connection for any push messages
                 _ = interval.tick() => {
-                    let response = Self::handle_internal_message(connection.clone()).await;
+                    let response = Self::handle_internal_message(user_id, &mut to_user_receiver).await;
                     if let Some(response) = response {
                         let response_body = serde_json::to_string(&response).expect("Could not serialize response.");
                         ws_sender.send(Message::Text(response_body)).await.unwrap();
@@ -197,8 +159,9 @@ where
                     let msg = msg.expect("Couldn't unwrap message");
 
                     let result = Self::handle_external_message(
-                        connection.clone(),
+                        user_id,
                         msg,
+                        to_user_sender.clone(),
                         mm_sender.clone()
                     ).await;
 
@@ -229,9 +192,10 @@ where
     // Read message from connection, return immediate response
     // TODO: do we need the sender here if we're not responding immediately?
     async fn handle_external_message(
-        connection: Connection<ExternalRS>,
+        user_id: Id,
         message: Message,
-        mm_sender: Sender<InternalRQ>,
+        to_user: Sender<ExternalRS>,
+        to_internal: Sender<InternalRQ>,
     ) -> Result<Option<SocketResponse<ExternalRS>>, &'static str> {
         if !message.is_text() {
             return Err("Got non-text message :(");
@@ -242,27 +206,19 @@ where
         let request: SocketRequest<ExternalRQ> =
             serde_json::from_str(body).expect("Could not deserialize request.");
 
-        let response = Self::respond_to_request(connection.clone(), request.body, mm_sender).await;
+        let response = Self::respond_to_request(user_id, request.body, to_user, to_internal).await;
 
-        Ok(response.map(|body| SocketResponse {
-            user_id: connection.user_id,
-            body,
-        }))
+        Ok(response.map(|body| SocketResponse { user_id, body }))
     }
 
     // Read internal message to potentially forward to the user.
     async fn handle_internal_message(
-        connection: Connection<ExternalRS>,
+        user_id: Id,
+        receiver: &mut mpsc::Receiver<ExternalRS>,
     ) -> Option<SocketResponse<ExternalRS>> {
-        // See if MM sent any messages
-        let mut receiver = connection.to_socket.receiver.lock().await;
-
         // If message was sent, forward to user
         match receiver.try_recv() {
-            Ok(body) => Some(SocketResponse {
-                user_id: connection.user_id,
-                body,
-            }),
+            Ok(body) => Some(SocketResponse { user_id, body }),
             Err(_) => None,
         }
     }
@@ -274,9 +230,10 @@ where
 
     // Logic to handle a client's request
     async fn respond_to_request(
-        _connection: Connection<ExternalRS>,
+        _user_id: Id,
         _request: ExternalRQ,
-        _internal_sender: Sender<InternalRQ>,
+        _to_user: Sender<ExternalRS>,
+        _to_internal: Sender<InternalRQ>,
     ) -> Option<ExternalRS> {
         None
     }

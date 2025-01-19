@@ -1,33 +1,31 @@
 use std::{net::Ipv6Addr, sync::Arc};
 
 use axum::async_trait;
-use common::websocket::{Connection, WebSocketState, WebsocketHandler};
+use common::{
+    model::messages::Id,
+    websocket::{Connection, WebsocketHandler},
+};
 use tokio::sync::{mpsc::Sender, Mutex};
 use tracing::debug;
 
 use crate::model::messages::{ClientRequest, ClientResponse, MatchmakingRequest, Player};
 
-pub struct QueueSocket {
-    state: Arc<Mutex<WebSocketState<ClientResponse>>>,
-}
+pub struct QueueSocket {}
 
 #[async_trait]
 impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest> for QueueSocket {
-    fn get_state(&self) -> Arc<Mutex<WebSocketState<ClientResponse>>> {
-        self.state.clone()
-    }
-
     async fn respond_to_request(
-        connection: Connection<ClientResponse>,
+        user_id: Id,
         request: ClientRequest,
+        to_user_sender: Sender<ClientResponse>,
         mm_sender: Sender<MatchmakingRequest>,
     ) -> Option<ClientResponse> {
         match request {
             ClientRequest::JoinQueue => {
                 // Tell matchmaking to add user to the queue
                 let mm_request = MatchmakingRequest::JoinQueue(Player {
-                    id: connection.user_id,
-                    sender: connection.to_socket.sender.clone(),
+                    id: user_id,
+                    sender: to_user_sender.clone(),
                 });
                 debug!("Send mm {:?}", mm_request);
                 mm_sender.send(mm_request).await.unwrap();
@@ -53,9 +51,7 @@ impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest> for Que
 
 impl QueueSocket {
     pub fn new() -> Self {
-        Self {
-            state: Arc::new(Mutex::new(WebSocketState::new())),
-        }
+        Self {}
     }
 }
 

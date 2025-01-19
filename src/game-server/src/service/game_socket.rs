@@ -5,17 +5,16 @@ use crate::model::{
     internal::{GameRequest, PlayerHandle},
 };
 use async_trait::async_trait;
-use common::websocket::{Connection, WebSocketState, WebsocketHandler};
+use common::{
+    model::messages::Id,
+    websocket::{Connection, WebsocketHandler},
+};
 use tokio::sync::{mpsc::Sender, Mutex};
 use tracing::debug;
-pub struct GameSocket {
-    state: Arc<Mutex<WebSocketState<ClientResponse>>>,
-}
+pub struct GameSocket {}
 impl GameSocket {
     pub fn new() -> Self {
-        Self {
-            state: Arc::new(Mutex::new(WebSocketState::new())),
-        }
+        Self {}
     }
 }
 impl Default for GameSocket {
@@ -26,20 +25,17 @@ impl Default for GameSocket {
 
 #[async_trait]
 impl WebsocketHandler<ClientRequest, ClientResponse, GameRequest> for GameSocket {
-    fn get_state(&self) -> Arc<Mutex<WebSocketState<ClientResponse>>> {
-        self.state.clone()
-    }
-
     async fn respond_to_request(
-        connection: Connection<ClientResponse>,
+        user_id: Id,
         request: ClientRequest,
+        to_user_sender: Sender<ClientResponse>,
         internal_sender: Sender<GameRequest>,
     ) -> Option<ClientResponse> {
         // Resolve player object and route to game manager
         let request = GameRequest {
             player: PlayerHandle {
-                id: connection.user_id,
-                sender: connection.to_socket.sender.clone(),
+                id: user_id,
+                sender: to_user_sender.clone(),
             },
             request,
         };
