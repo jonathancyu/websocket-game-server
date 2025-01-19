@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, time::Duration};
+use std::{collections::HashMap, fmt::Debug, fs, time::Duration};
 
 use futures_util::{
     stream::{SplitSink, SplitStream},
@@ -65,11 +65,17 @@ enum ServerHandle {
 // TODO: how to pass N generics?
 impl<RQ, RS, RestRq, RestRs> TestCase<RQ, RS, RestRq, RestRs>
 where
-    RQ: Serialize,
+    RQ: Serialize + for<'de> Deserialize<'de>,
     RS: Serialize + for<'de> Deserialize<'de> + Debug + PartialEq,
-    RestRq: Serialize + Debug,
+    RestRq: Serialize + for<'de> Deserialize<'de> + Debug,
     RestRs: Serialize + for<'de> Deserialize<'de> + Debug + PartialEq,
 {
+    pub fn load(file_path: String) -> Self {
+        let text = fs::read_to_string(file_path).expect("Unable to read file");
+        let test_case: Self = serde_json::from_str(&text).expect("Could not parse test case");
+        test_case
+    }
+
     pub async fn run(&self, address_lookup: HashMap<String, ServerAddress>) {
         let timeout_len = Duration::from_millis(1500);
         let mut server_handles = HashMap::new();

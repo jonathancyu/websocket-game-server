@@ -171,7 +171,7 @@ where
         };
 
         debug!("Listening to {:?}", user_id);
-        let mut interval = time::interval(Duration::from_secs(1));
+        let mut interval = time::interval(Duration::from_millis(50));
         loop {
             let mut close_socket = false;
             tokio::select! {

@@ -68,7 +68,7 @@ async fn serve(
 // https://github.com/tokio-rs/axum/blob/main/examples/reqwest-response/src/main.rs
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, fs};
+    use std::collections::HashMap;
 
     use common::{
         model::messages::{
@@ -258,16 +258,12 @@ mod tests {
     #[tokio::test]
     async fn run_game() {
         let server = TestServer::new().await;
-        let data_path = env!("CARGO_MANIFEST_DIR").to_string() + "/tests/data/full_game.json";
-        let text = fs::read_to_string(data_path).expect("Unable to read file");
-        let test_case: TestCase<
-            ClientRequest,
-            ClientResponse,
-            CreateGameRequest,
-            CreateGameResponse,
-        > = serde_json::from_str(&text).expect("Could not parse test case");
+        let file_path = env!("CARGO_MANIFEST_DIR").to_string() + "/tests/data/full_game.json";
+        let test_case =
+            TestCase::<ClientRequest, ClientResponse, CreateGameRequest, CreateGameResponse>::load(
+                file_path,
+            );
 
-        // TODO: how to emulate two different sockets?
         let address_lookup = HashMap::from([
             (
                 "user1".to_string(),
