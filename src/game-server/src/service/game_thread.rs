@@ -62,7 +62,13 @@ impl GameState {
                 match request.request {
                     ClientRequest::JoinGame => {
                         connected.insert(player_id);
-                        self.players.insert(player_id, Player::from(request.player));
+                        let player = Player::from(request.player);
+                        player
+                            .sender
+                            .send(ClientResponse::GameJoined)
+                            .await
+                            .expect("Failed to send client response");
+                        self.players.insert(player_id, player);
                     }
                     _ => {
                         warn!("Got non-JoinGame message in WaitingForPlayers phase");
