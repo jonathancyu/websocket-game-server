@@ -9,9 +9,13 @@
           "${user1}",
           "${user2}"
         ],
-        "games_to_win": 1
+        "games_to_win": 2
       },
       "response_code": 201
+    },
+    {
+      "type": "Comment",
+      "text": "Users joining"
     },
     {
       "type": "SocketOpen",
@@ -64,6 +68,10 @@
       }
     },
     {
+      "type": "Comment",
+      "text": "Round 1"
+    },
+    {
       "type": "SocketReceive",
       "name": "user1",
       "response": {
@@ -80,6 +88,52 @@
         "user_id": "${user2}",
         "body": {
           "type": "PendingMove"
+        }
+      }
+    },
+    {
+      "type": "SocketSend",
+      "name": "user1",
+      "request": {
+        "user_id": "${user1}",
+        "body": {
+          "type": "Move",
+          "value": "Rock"
+        }
+      }
+    },
+    {
+      "type": "SocketSend",
+      "name": "user2",
+      "request": {
+        "user_id": "${user2}",
+        "body": {
+          "type": "Move",
+          "value": "Paper"
+        }
+      }
+    },
+    {
+      "type": "SocketReceive",
+      "name": "user1",
+      "response": {
+        "user_id": "${user1}",
+        "body": {
+          "type": "RoundResult",
+          "result": "Loss",
+          "other_move": "Paper"
+        }
+      }
+    },
+    {
+      "type": "SocketReceive",
+      "name": "user2",
+      "response": {
+        "user_id": "${user2}",
+        "body": {
+          "type": "RoundResult",
+          "result": "Win",
+          "other_move": "Rock"
         }
       }
     }

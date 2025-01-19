@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::{net::TcpStream, time::timeout};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::model::messages::{Id, OpenSocketRequest, SocketRequest, SocketResponse};
 
@@ -37,6 +37,9 @@ where
         request: RestRq,
         response_code: u16,
         response: Option<RestRs>,
+    },
+    Comment {
+        text: String,
     },
 }
 
@@ -207,6 +210,9 @@ where
                             debug!("Failed to deserialize response: {:?}", e);
                         }
                     }
+                }
+                Event::Comment { text } => {
+                    info!("Comment: {:}", text)
                 }
             }
         }

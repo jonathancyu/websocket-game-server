@@ -39,8 +39,8 @@ socket -> thread : Move { player1, Rock }
 p2 -> socket : Move { Paper }
 socket -> thread : Move { player2, Paper }
 socket <- thread : RoundResult { Win { Player2 } }
-p1 <- socket : RoundLoss { other: Paper }
-p2 <- socket : RoundWin { other: Rock }
+p1 <- socket : RoundResult { result: Loss, other: Paper }
+p2 <- socket : RoundResult { result: Win, other: Rock }
 
 == Round 2 ==
 note left thread : Exact same sequence as above
