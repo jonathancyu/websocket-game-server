@@ -45,10 +45,14 @@ impl Serialize for Id {
 }
 
 // Websocket messages
-// TODO: rename body field to body
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct OpenSocketRequest {
+    pub user_id: Id,
+}
+
 #[derive(Serialize, Deserialize, PartialEq)]
 pub struct SocketRequest<T> {
-    pub user_id: Option<Id>,
+    pub user_id: Option<Id>, // TODO: remove optional
     pub body: T,
 }
 

@@ -11,7 +11,7 @@ use tokio::{net::TcpStream, time::timeout};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, warn};
 
-use crate::model::messages::{SocketRequest, SocketResponse};
+use crate::model::messages::{Id, OpenSocketRequest, SocketRequest, SocketResponse};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -19,6 +19,10 @@ enum Event<RQ, RS, RestRq, RestRs>
 where
     RS: Serialize,
 {
+    SocketOpen {
+        name: String,
+        user_id: Id,
+    },
     SocketSend {
         name: String,
         request: SocketRequest<RQ>,
@@ -85,10 +89,35 @@ where
             );
         }
 
+        // TODO: remove duplicate code (fr fr)
         for event in self.sequence.iter() {
             match event {
+                Event::SocketOpen { name, user_id } => {
+                    let handle = server_handles.get_mut(name).expect("Send socket not found");
+                    assert!(matches!(
+                        handle,
+                        ServerHandle::WebSocket { write: _, read: _ }
+                    ));
+                    let ServerHandle::WebSocket {
+                        ref mut write,
+                        ref mut read,
+                    } = handle
+                    else {
+                        panic!("Expected WebSocket handle at {:}", name);
+                    };
+
+                    // TODO: UNLESS it's a ping message
+                    if let Ok(msg) = timeout(timeout_len, read.try_next()).await {
+                        panic!("Expected no incoming message, got {:?}", msg);
+                    }
+
+                    let body: String = json!(OpenSocketRequest { user_id: *user_id }).to_string();
+                    timeout(timeout_len, write.send(Message::text(body)))
+                        .await
+                        .expect("Timeout sending message")
+                        .expect("Failed to send message");
+                }
                 Event::SocketSend { name, request } => {
-                    // TODO: how to dedupe?
                     let handle = server_handles.get_mut(name).expect("Send socket not found");
                     assert!(matches!(
                         handle,

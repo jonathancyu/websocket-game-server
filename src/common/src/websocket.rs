@@ -19,11 +19,11 @@ use tokio_tungstenite::{
         Message,
     },
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, field::debug, info, warn};
 use uuid::Uuid;
 
 use crate::{
-    model::messages::{Id, SocketRequest, SocketResponse},
+    model::messages::{Id, OpenSocketRequest, SocketRequest, SocketResponse},
     utility::Channel,
 };
 
@@ -140,10 +140,13 @@ where
                 }
                 Some(Ok(msg)) => {
                     if let Ok(msg_str) = msg.to_text() {
-                        if let Ok(request) = serde_json::from_str::<SocketRequest<()>>(msg_str) {
-                            user_id = request.user_id;
-                        } else {
-                            warn!("Failed to parse identification message");
+                        match serde_json::from_str::<OpenSocketRequest>(msg_str) {
+                            Ok(request) => {
+                                user_id = Some(request.user_id);
+                            }
+                            Err(error) => {
+                                warn!("Failed to parse identification message: {:?}", error);
+                            }
                         }
                     } else {
                         warn!("Received non-text message");
