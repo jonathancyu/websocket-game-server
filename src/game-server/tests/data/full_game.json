@@ -136,6 +136,58 @@
           "other_move": "Rock"
         }
       }
+    },
+    {
+      "type": "Comment",
+      "text": "Round 2"
+    },
+    {
+      "type": "SocketSend",
+      "name": "user1",
+      "request": {
+        "user_id": "${user1}",
+        "body": {
+          "type": "Move",
+          "value": "Rock"
+        }
+      }
+    },
+    {
+      "type": "SocketSend",
+      "name": "user2",
+      "request": {
+        "user_id": "${user2}",
+        "body": {
+          "type": "Move",
+          "value": "Paper"
+        }
+      }
+    },
+    {
+      "type": "SocketReceive",
+      "name": "user1",
+      "response": {
+        "user_id": "${user1}",
+        "body": {
+          "type": "MatchResult",
+          "result": "Loss",
+          "wins": 0,
+          "total": 2
+        }
+      }
+    },
+    {
+      "type": "SocketReceive",
+      "name": "user2",
+      "response": {
+        "user_id": "${user2}",
+        "body": {
+          "type": "MatchResult",
+          "result": "Win",
+          "wins": 2,
+          "total": 2
+        }
+      }
     }
   ]
 }
