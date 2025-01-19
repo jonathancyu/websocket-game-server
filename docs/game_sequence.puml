@@ -14,12 +14,14 @@ end box
 
 == Create game ==
 mm_listener <- mm : POST /new_game { game_id: ..., \nplayers: [player1userid, player2userid]}
+p1 -> socket : SocketOpen
 p1 -> socket : Join game
 socket -> thread : Connect player1
 thread -> thread : lookup player1 game
 socket <- thread : player1 Connected
 p1 <- socket : GameJoined
 
+p2 -> socket : SocketOpen
 p2 -> socket : Join game
 socket -> thread : Connect player2
 thread -> thread : lookup player2 game
