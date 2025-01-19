@@ -71,7 +71,7 @@ where
     RestRs: Serialize + for<'de> Deserialize<'de> + Debug + PartialEq,
 {
     pub async fn run(&self, address_lookup: HashMap<String, ServerAddress>) {
-        let timeout_len = Duration::from_millis(500);
+        let timeout_len = Duration::from_millis(1500);
         let mut server_handles = HashMap::new();
         for (id, address) in address_lookup {
             server_handles.insert(
