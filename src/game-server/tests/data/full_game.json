@@ -15,12 +15,12 @@
     },
     {
       "type": "SocketOpen",
-      "name": "game",
+      "name": "user1",
       "user_id": "f177a23d-e0b6-4ba8-b70e-53eaba84473c"
     },
     {
       "type": "SocketSend",
-      "name": "game",
+      "name": "user1",
       "request": {
         "user_id": "f177a23d-e0b6-4ba8-b70e-53eaba84473c",
         "body": {
@@ -30,9 +30,34 @@
     },
     {
       "type": "SocketReceive",
-      "name": "game",
+      "name": "user1",
       "response": {
         "user_id": "f177a23d-e0b6-4ba8-b70e-53eaba84473c",
+        "body": {
+          "type": "GameJoined"
+        }
+      }
+    },
+    {
+      "type": "SocketOpen",
+      "name": "user2",
+      "user_id": "83445375-242f-41b4-898b-d01237dad5c6"
+    },
+    {
+      "type": "SocketSend",
+      "name": "user2",
+      "request": {
+        "user_id": "83445375-242f-41b4-898b-d01237dad5c6",
+        "body": {
+          "type": "JoinGame"
+        }
+      }
+    },
+    {
+      "type": "SocketReceive",
+      "name": "user2",
+      "response": {
+        "user_id": "83445375-242f-41b4-898b-d01237dad5c6",
         "body": {
           "type": "GameJoined"
         }

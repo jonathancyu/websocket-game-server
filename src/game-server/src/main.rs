@@ -270,8 +270,12 @@ mod tests {
         // TODO: how to emulate two different sockets?
         let address_lookup = HashMap::from([
             (
-                "game".to_string(),
-                ServerAddress::WebSocket(url("ws", server.socket_address, "")),
+                "user1".to_string(),
+                ServerAddress::WebSocket(url("ws", server.socket_address.clone(), "")),
+            ),
+            (
+                "user2".to_string(),
+                ServerAddress::WebSocket(url("ws", server.socket_address.clone(), "")),
             ),
             (
                 "rest".to_string(),
