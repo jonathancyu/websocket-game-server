@@ -169,6 +169,31 @@
       "response": {
         "user_id": "${user1}",
         "body": {
+          "type": "RoundResult",
+          "result": "Loss",
+          "other_move": "Paper"
+        }
+      }
+    },
+    {
+      "type": "SocketReceive",
+      "name": "user2",
+      "response": {
+        "user_id": "${user2}",
+        "body": {
+          "type": "RoundResult",
+          "result": "Win",
+          "other_move": "Rock"
+        }
+      }
+    },
+
+    {
+      "type": "SocketReceive",
+      "name": "user1",
+      "response": {
+        "user_id": "${user1}",
+        "body": {
           "type": "MatchResult",
           "result": "Loss",
           "wins": 0,

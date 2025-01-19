@@ -120,6 +120,7 @@ impl GameState {
                     .iter()
                     .collect_tuple()
                     .expect("Expected two player-move pairs");
+
                 // Update self
                 match Self::get_winner(player_1, player_2) {
                     Some(winner_id) => {
@@ -129,6 +130,7 @@ impl GameState {
 
                         let config = self.configuration.clone();
                         if winner.wins >= config.games_to_win {
+                            self.notify_round_result(winner_id, moves).await;
                             self.notify_match_result(winner_id).await;
                             self.phase = GamePhase::Done;
                         } else {
