@@ -1,11 +1,8 @@
-use std::{net::Ipv6Addr, sync::Arc};
+use std::net::Ipv6Addr;
 
 use axum::async_trait;
-use common::{
-    model::messages::Id,
-    websocket::{Connection, WebsocketHandler},
-};
-use tokio::sync::{mpsc::Sender, Mutex};
+use common::{model::messages::Id, websocket::WebsocketHandler};
+use tokio::sync::mpsc::Sender;
 use tracing::debug;
 
 use crate::model::messages::{ClientRequest, ClientResponse, MatchmakingRequest, Player};

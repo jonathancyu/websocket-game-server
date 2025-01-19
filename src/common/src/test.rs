@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::{net::TcpStream, time::timeout};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::model::messages::{Id, OpenSocketRequest, SocketRequest, SocketResponse};
 

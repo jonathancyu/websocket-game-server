@@ -1,4 +1,3 @@
-use std::sync::Arc;
 
 use crate::model::{
     external::{ClientRequest, ClientResponse},
@@ -7,10 +6,9 @@ use crate::model::{
 use async_trait::async_trait;
 use common::{
     model::messages::Id,
-    websocket::{Connection, WebsocketHandler},
+    websocket::WebsocketHandler,
 };
-use tokio::sync::{mpsc::Sender, Mutex};
-use tracing::debug;
+use tokio::sync::mpsc::Sender;
 pub struct GameSocket {}
 impl GameSocket {
     pub fn new() -> Self {

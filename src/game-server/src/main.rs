@@ -83,7 +83,7 @@ mod tests {
     use serde_json::json;
     use tokio::{net::UdpSocket, sync::broadcast};
     use tokio_tungstenite::{connect_async, tungstenite::Message};
-    use tracing::{debug, warn};
+    use tracing::debug;
 
     use super::*;
     struct TestServer {
