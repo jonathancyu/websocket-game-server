@@ -102,15 +102,21 @@ impl GameManager {
 
     async fn route_request(state: Arc<Mutex<GameManagerState>>, request: GameRequest) {
         let state = state.lock().await;
+        // Resolve game id by player
         let player_id = request.player.id;
-        debug!("State when getting req: {:?}", state.player_assignment);
-        match state.games.get(&player_id) {
+        let Some(game_id) = state.player_assignment.get(&player_id) else {
+            warn!("No game found for player {:?}", player_id);
+            return;
+        };
+
+        // Lookup game
+        match state.games.get(game_id) {
             Some(game) => {
                 let game = game.lock().await;
-                game.to_game.send(request).await.unwrap_or_else(|_| {
+                game.to_game.send(request).await.unwrap_or_else(|e| {
                     panic!(
-                        "Failed to route request to game for player {:?}, game {:?}",
-                        player_id, game.id
+                        "Failed to route request to game for player {:?}, game {:?}, err {:?}",
+                        player_id, game.id, e
                     )
                 });
             }

@@ -43,7 +43,6 @@ impl WebsocketHandler<ClientRequest, ClientResponse, GameRequest> for GameSocket
             },
             request,
         };
-        debug!("Sending request to thread: {:?}", request);
         internal_sender
             .send(request)
             .await
