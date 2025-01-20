@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Debug, fs, time::Duration};
 
 use futures_util::{
     stream::{SplitSink, SplitStream},
-    SinkExt, StreamExt, TryStreamExt,
+    FutureExt, SinkExt, StreamExt, TryStreamExt,
 };
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -84,7 +84,7 @@ where
     }
 
     pub async fn run(&self, address_lookup: HashMap<String, ServerAddress>) {
-        let timeout_len = Duration::from_millis(1500);
+        let timeout_len = Duration::from_millis(50);
         let mut server_handles = HashMap::new();
         for (id, address) in address_lookup {
             server_handles.insert(
@@ -145,7 +145,7 @@ where
                     };
 
                     // TODO: UNLESS it's a ping message
-                    if let Ok(msg) = timeout(timeout_len, read.try_next()).await {
+                    if let Some(msg) = read.next().now_or_never() {
                         panic!("Expected no incoming message, got {:?}", msg);
                     }
 
