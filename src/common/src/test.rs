@@ -1,4 +1,9 @@
-use std::{collections::HashMap, fmt::Debug, fs, time::Duration};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    fs,
+    time::Duration,
+};
 
 use futures_util::{
     stream::{SplitSink, SplitStream},
@@ -106,54 +111,14 @@ where
         for event in self.sequence.iter() {
             match event {
                 Event::SocketOpen { name, user_id } => {
-                    let handle = server_handles.get_mut(name).expect("Send socket not found");
-                    assert!(matches!(
-                        handle,
-                        ServerHandle::WebSocket { write: _, read: _ }
-                    ));
-                    let ServerHandle::WebSocket {
-                        ref mut write,
-                        ref mut read,
-                    } = handle
-                    else {
-                        panic!("Expected WebSocket handle at {:}", name);
-                    };
-
-                    // TODO: UNLESS it's a ping message
-                    if let Ok(msg) = timeout(timeout_len, read.try_next()).await {
-                        panic!("Expected no incoming message, got {:?}", msg);
-                    }
-
                     let body: String = json!(OpenSocketRequest { user_id: *user_id }).to_string();
-                    timeout(timeout_len, write.send(Message::text(body)))
-                        .await
-                        .expect("Timeout sending message")
-                        .expect("Failed to send message");
+                    let handle = server_handles.get_mut(name).expect("Send socket not found");
+                    Self::socket_send(timeout_len, handle, body).await;
                 }
                 Event::SocketSend { name, request } => {
-                    let handle = server_handles.get_mut(name).expect("Send socket not found");
-                    assert!(matches!(
-                        handle,
-                        ServerHandle::WebSocket { write: _, read: _ }
-                    ));
-                    let ServerHandle::WebSocket {
-                        ref mut write,
-                        ref mut read,
-                    } = handle
-                    else {
-                        panic!("Expected WebSocket handle at {:}", name);
-                    };
-
-                    // TODO: UNLESS it's a ping message
-                    if let Some(msg) = read.next().now_or_never() {
-                        panic!("Expected no incoming message, got {:?}", msg);
-                    }
-
                     let body: String = json!(request).to_string();
-                    timeout(timeout_len, write.send(Message::text(body)))
-                        .await
-                        .expect("Timeout sending message")
-                        .expect("Failed to send message");
+                    let handle = server_handles.get_mut(name).expect("Send socket not found");
+                    Self::socket_send(timeout_len, handle, body).await;
                 }
                 Event::SocketReceive {
                     name,
@@ -216,5 +181,25 @@ where
                 }
             }
         }
+    }
+
+    async fn socket_send(timeout_len: Duration, handle: &mut ServerHandle, body: impl ToString) {
+        let ServerHandle::WebSocket {
+            ref mut write,
+            ref mut read,
+        } = handle
+        else {
+            panic!("Expected WebSocket handle");
+        };
+
+        // TODO: UNLESS it's a ping message
+        if let Some(msg) = read.try_next().now_or_never() {
+            panic!("Expected no incoming message, got {:?}", msg);
+        }
+
+        timeout(timeout_len, write.send(Message::text(body.to_string())))
+            .await
+            .expect("Timeout sending message")
+            .expect("Failed to send message");
     }
 }
