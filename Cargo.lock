@@ -461,7 +461,6 @@ dependencies = [
  "futures-util",
  "itertools 0.14.0",
  "prost",
- "reqwest",
  "serde",
  "serde_json",
  "tokio",

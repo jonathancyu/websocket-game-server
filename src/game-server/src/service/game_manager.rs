@@ -8,6 +8,7 @@ use axum::{
     Json, Router,
 };
 use common::model::messages::{CreateGameRequest, CreateGameResponse, GetGameResponse, Id};
+use common::reqwest::Url;
 use tokio::{
     sync::{
         broadcast,
@@ -106,6 +107,7 @@ impl GameManager {
         let player_id = request.player.id;
         let Some(game_id) = state.player_assignment.get(&player_id) else {
             warn!("No game found for player {:?}", player_id);
+            debug!("Assignment: {:?}", state.player_assignment);
             return;
         };
 
@@ -207,7 +209,15 @@ impl GameManager {
             "New state after creating game: {:?}",
             state.player_assignment
         );
-        (StatusCode::CREATED, Json(CreateGameResponse { game_id })).into_response()
+        let url = Url::parse("ws://0.0.0.0:3002").unwrap();
+        (
+            StatusCode::CREATED,
+            Json(CreateGameResponse {
+                game_id,
+                address: url.to_string(), // TODO: dynamically allocate? or is that unnecessary
+            }),
+        )
+            .into_response()
     }
 
     async fn get_game(

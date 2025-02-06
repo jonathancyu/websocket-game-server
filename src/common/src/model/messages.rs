@@ -51,6 +51,7 @@ pub struct OpenSocketRequest {
     pub user_id: Id,
 }
 
+// TODO: With the new OpenSocketRequest protocol, we don't need the SocketRequest wrapper anymore.
 #[derive(Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SocketRequest<T> {
@@ -78,6 +79,7 @@ pub struct CreateGameRequest {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct CreateGameResponse {
     pub game_id: Id,
+    pub address: String,
 }
 
 #[derive(Serialize, Deserialize)]
