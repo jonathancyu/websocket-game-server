@@ -5,6 +5,7 @@ import { MatchmakingRequest } from "./requests";
 import { MatchmakingResponse } from "./responses";
 
 type QueueProps = {
+  userId: string;
   joinGame: (serverAddress: string) => void;
 };
 
@@ -13,8 +14,8 @@ type QueueState =
   | { type: "Connecting" }
   | { type: "NotInQueue" };
 
-export default function Queue({ joinGame }: QueueProps) {
-  const queue = useWebSocket<MatchmakingRequest, MatchmakingResponse>();
+export default function Queue({ userId, joinGame }: QueueProps) {
+  const queue = useWebSocket<MatchmakingRequest, MatchmakingResponse>(userId);
   const [queueState, setQueueState] = useState<QueueState>({
     type: "NotInQueue",
   });

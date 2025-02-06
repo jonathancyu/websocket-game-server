@@ -30,12 +30,17 @@ export type SocketHook<RQ, RS> = {
   close: () => void;
 };
 
-export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
+type OpenSocketRequest = {
+  userId: string;
+};
+
+export default function useWebSocket<RQ, RS>(
+  userId: string,
+): SocketHook<RQ, RS> {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
     ConnectionStatus.Off,
   );
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
 
   const send = (socket: WebSocket, request: RQ) => {
     const payload: SocketRequest<RQ> = {
@@ -57,9 +62,12 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
 
     // TODO: Why does this fire twice?
     newSocket.onopen = () => {
+      // Identify user according to protocol
+      newSocket.send(JSON.stringify({ userId: userId } as OpenSocketRequest));
+
+      // Call on-open request provider, send if we get something.
       setConnectionStatus(ConnectionStatus.Connected);
       const request = onOpenRequestProvider();
-      console.log("ABC", url, newSocket);
       if (request != null) {
         send(newSocket, request);
       }
@@ -72,9 +80,6 @@ export default function useWebSocket<RQ, RS>(): SocketHook<RQ, RS> {
 
     newSocket.onmessage = (event) => {
       const message = JSON.parse(event.data) as SocketResponse<RS>;
-      if (!userId) {
-        setUserId(message.userId);
-      }
       onMessage(message.body);
     };
 

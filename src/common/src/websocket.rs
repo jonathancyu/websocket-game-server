@@ -115,7 +115,10 @@ where
                                 user_id = Some(request.user_id);
                             }
                             Err(error) => {
-                                warn!("Failed to parse identification message: {:?}", error);
+                                warn!(
+                                    "Failed to parse identification message: {:?} ({:})",
+                                    error, msg
+                                );
                             }
                         }
                     } else {

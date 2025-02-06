@@ -2,7 +2,7 @@ import { Move, Result } from "./model";
 
 export type GameRequest =
     | { type: "JoinGame" }
-    | { type: "Move"; move: Move };
+    | { type: "Move"; value: Move };
 
 export type GameResponse =
     | { type: "GameJoined" }

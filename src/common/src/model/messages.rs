@@ -46,18 +46,20 @@ impl Serialize for Id {
 
 // Websocket messages
 #[derive(Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct OpenSocketRequest {
     pub user_id: Id,
 }
 
 #[derive(Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct SocketRequest<T> {
     pub user_id: Option<Id>, // TODO: remove optional
     pub body: T,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub struct SocketResponse<T>
 where
     T: Serialize,
