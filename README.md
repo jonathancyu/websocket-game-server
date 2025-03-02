@@ -2,8 +2,7 @@
 ## MVP1 - Matchmaking + stress test
 - [x] Implement naive 1-1 matchmaking
 - [x] Create rock-paper-scissors socket server
-- [/] Create rock-paper-scissors web client
+- [x] Create rock-paper-scissors web client
+- [ ] Deploy & stress test
 - [ ] Create RPS agents
-- [ ] Dockerize
-- [ ] Stress test
 - [ ] Implement ELO matchmaking
