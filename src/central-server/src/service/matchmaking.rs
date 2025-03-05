@@ -95,7 +95,7 @@ impl MatchmakingService {
         self.users_in_queue.insert(user_id);
     }
 
-    pub async fn listen(
+    pub async fn run(
         &mut self,
         shutdown_receiver: &mut broadcast::Receiver<()>,
         ws_receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
@@ -122,6 +122,7 @@ impl MatchmakingService {
         Ok(())
     }
 
+    // POST to game-server to create a game thread
     async fn create_game(&self, players: Vec<Id>) -> Result<CreateGameResponse> {
         let request = CreateGameRequest {
             players,

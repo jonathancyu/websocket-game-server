@@ -44,7 +44,7 @@ impl GameManager {
         GameManager {}
     }
 
-    pub async fn listen(
+    pub async fn run(
         &self,
         address: String,
         shutdown_receiver: &mut broadcast::Receiver<()>,
