@@ -9,6 +9,7 @@ box "Game Server" #Lavender
 end box
 box "Matchmaking Server" #WhiteSmoke
     participant "Matchmaking" as mm
+    database "DB" as db
 end box
 
 
@@ -51,6 +52,7 @@ socket <- thread : MatchResult { Win { Player2 }}
 p1 <- socket : MatchResult { result: Loss, won: 1, total: 3 }
 p2 <- socket : MatchResult { result: Win, won: 2, total: 3 }
 thread -> mm : POST /game_result { game_id: ..., results: [ \n{user_id: player1, score: 0}, \n{user_id: player2, score: 2} ] }
+mm -> db : Update match result table and player elo
 note left mm : Update elo
 
 

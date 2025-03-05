@@ -1,9 +1,18 @@
+use std::path::Path;
+
 use central_server::service::{matchmaking::MatchmakingService, queue_socket::QueueSocket};
 use common::reqwest::Url;
 use common::utility::{create_shutdown_channel, Channel};
 use common::websocket::WebsocketHandler;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::Level;
+
+// TODO: adopt this
+pub struct CentralServerConfig {
+    pub websocket_url: Url,
+    pub game_socket_url: Url,
+    pub db_file: Path,
+}
 
 #[tokio::main]
 async fn main() {
@@ -27,7 +36,8 @@ async fn main() {
     let matchmaker_handle: JoinHandle<()> = tokio::spawn(async move {
         MatchmakingService::new(game_server_url)
             .listen(&mut mm_shutdown_receiver, to_mm_channel.receiver)
-            .await;
+            .await
+            .expect("Failed to spawn matchmaking service");
     });
     let websocket_handle: JoinHandle<()> = tokio::spawn(async move {
         QueueSocket::new()
