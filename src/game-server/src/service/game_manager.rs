@@ -39,6 +39,7 @@ struct GameManagerState {
 }
 pub struct GameManager {}
 
+// TODO: this is a controller. Separate threads into their own "services"? 🤔
 impl GameManager {
     pub fn new() -> Self {
         GameManager {}
@@ -63,7 +64,7 @@ impl GameManager {
                                         // before moving :(
         let rest_shutdown_receiver = shutdown_receiver.resubscribe();
         let rest_handle: JoinHandle<()> = tokio::spawn(async move {
-            Self::serve_rest_endpoint(address, rest_state, rest_shutdown_receiver).await
+            Self::rest_endpoint_thread(address, rest_state, rest_shutdown_receiver).await
         });
 
         // Spawn thread to route game messages to game threads
@@ -127,7 +128,7 @@ impl GameManager {
     }
 
     // REST functions
-    async fn serve_rest_endpoint(
+    async fn rest_endpoint_thread(
         address: String,
         state: Arc<Mutex<GameManagerState>>,
         mut shutdown_receiver: broadcast::Receiver<()>,

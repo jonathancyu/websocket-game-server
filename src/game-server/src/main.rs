@@ -36,7 +36,7 @@ async fn serve(
     // One thread per game
     let manager_handle = tokio::spawn(async move {
         GameManager::new()
-            .listen(
+            .run(
                 manager_address,
                 &mut manager_shutdown_receiver,
                 to_game_receiver,
@@ -70,6 +70,7 @@ async fn serve(
 mod tests {
     use std::collections::HashMap;
 
+    use common::reqwest::{Client, StatusCode};
     use common::{
         model::messages::{
             CreateGameRequest, CreateGameResponse, GetGameRequest, GetGameResponse, Id,
@@ -79,7 +80,6 @@ mod tests {
     };
     use futures_util::{SinkExt, StreamExt};
     use game_server::model::external::{ClientRequest, ClientResponse};
-    use reqwest::{Client, StatusCode};
     use serde_json::json;
     use tokio::{net::UdpSocket, sync::broadcast};
     use tokio_tungstenite::{connect_async, tungstenite::Message};

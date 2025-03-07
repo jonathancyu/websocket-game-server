@@ -92,3 +92,11 @@ pub struct GetGameResponse {
     pub game_id: Id,
     pub players: (Id, Id),
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct PostGameResultsRequest {
+    pub game_id: Id,
+    pub players: (Id, Id),
+    pub games_to_win: u8,
+    pub games_won: (u8, u8),
+}

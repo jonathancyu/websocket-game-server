@@ -23,7 +23,8 @@ async fn main() {
         .init();
     // Config
     let websocket_url = "0.0.0.0:3001".to_owned();
-    let game_server_url = Url::parse("http://0.0.0.0:8080").unwrap();
+    let matchmaking_rest_url = "0.0.0.0:8081".to_owned();
+    let game_server_url = Url::parse("http://0.0.0.0:8082").unwrap();
 
     // Channels for communication between matchmaker and websockets
     let to_mm_channel = Channel::from(mpsc::channel(100));
@@ -34,10 +35,14 @@ async fn main() {
 
     // Spawn thread for matchmaking
     let matchmaker_handle: JoinHandle<()> = tokio::spawn(async move {
-        MatchmakingService::new(game_server_url)
-            .listen(&mut mm_shutdown_receiver, to_mm_channel.receiver)
+        MatchmakingService::new()
+            .run(
+                matchmaking_rest_url,
+                game_server_url,
+                &mut mm_shutdown_receiver,
+                to_mm_channel.receiver,
+            )
             .await
-            .expect("Failed to spawn matchmaking service");
     });
     let websocket_handle: JoinHandle<()> = tokio::spawn(async move {
         QueueSocket::new()
@@ -46,7 +51,7 @@ async fn main() {
                 &mut ws_shutdown_receiver,
                 to_mm_channel.sender,
             )
-            .await;
+            .await
     });
 
     websocket_handle

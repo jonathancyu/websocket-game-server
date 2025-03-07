@@ -4,11 +4,22 @@ use std::{
     sync::Arc,
 };
 
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::{get, post},
+    Json, Router,
+};
 use common::{
-    model::messages::{CreateGameRequest, CreateGameResponse, Id},
+    model::messages::{CreateGameRequest, CreateGameResponse, Id, PostGameResultsRequest},
     reqwest::{Client, Url},
 };
-use tokio::sync::{broadcast, mpsc::Receiver, Mutex};
+use rusqlite::Connection;
+use tokio::{
+    sync::{broadcast, mpsc::Receiver, Mutex},
+    task::JoinHandle,
+};
+use tower_http::trace::TraceLayer;
 use tracing::{debug, error, info, warn};
 
 use crate::model::messages::{ClientResponse, MatchmakingRequest, Player};
@@ -20,21 +31,38 @@ pub struct Game {
     pub server_address: Url,
 }
 
-pub struct MatchmakingService {
-    game_server_url: Url,
-    queue: VecDeque<Player>,
-    users_in_queue: HashSet<Id>,
-    games: Vec<Game>,
+struct MatchmakingServiceState {
+    pub game_server_url: Url,
+    pub queue: VecDeque<Player>,
+    pub users_in_queue: HashSet<Id>,
+    pub games: Vec<Game>,
 }
+
+impl MatchmakingServiceState {
+    pub fn add_user(&mut self, player: Player) {
+        let user_id = player.clone().id;
+        if self.users_in_queue.contains(&user_id) {
+            warn!("User {:?} was already in the queue", user_id);
+            return;
+        }
+        info!("Adding user {:?} to queue", user_id);
+        self.queue.push_back(player);
+        self.users_in_queue.insert(user_id);
+    }
+}
+
+pub struct MatchmakingService {}
 
 type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 
+// TODO: this is a controller. Separate threads into their own "services"? 🤔
 impl MatchmakingService {
-    async fn read_queue(&mut self) -> Result<()> {
-        // BUG: need to lock queue, couldn't we be inserting into it?
+    // TODO: How can we reduce the size of this state?
+    async fn read_queue(state: Arc<Mutex<MatchmakingServiceState>>) -> Result<()> {
+        let mut state = state.lock().await;
         let mut unmatched_players: VecDeque<Player> = VecDeque::new();
         let mut matches: Vec<(Player, Player)> = vec![];
-        while let Some(player) = self.queue.pop_front() {
+        while let Some(player) = state.queue.pop_front() {
             if let Some(enemy) = unmatched_players.pop_front() {
                 info!("Matched {:?} and {:?}", player.id, enemy.id);
                 matches.push((player, enemy));
@@ -43,11 +71,12 @@ impl MatchmakingService {
             unmatched_players.push_back(player);
         }
         for (player1, player2) in matches.iter() {
-            self.users_in_queue.remove(&player1.id);
-            self.users_in_queue.remove(&player2.id);
+            state.users_in_queue.remove(&player1.id);
+            state.users_in_queue.remove(&player2.id);
 
             // Create game
-            let response = self.create_game(vec![player1.id, player2.id]).await?;
+            let response =
+                Self::create_game(&state.game_server_url, (player1.id, player2.id)).await?;
 
             // TODO: do we need to keep track of this? only thing we store in here is
             // the player's sender, and players will disconnect immediately anyways
@@ -68,38 +97,62 @@ impl MatchmakingService {
             player2.sender.send(message.clone()).await?;
 
             // Add game
-            self.games.push(game);
+            state.games.push(game);
         }
-        self.queue = unmatched_players;
+        state.queue = unmatched_players;
 
         Ok(())
     }
 
-    pub fn new(game_server_url: Url) -> Self {
-        Self {
+    pub fn new() -> Self {
+        MatchmakingService {}
+    }
+
+    pub async fn run(
+        &self,
+        rest_address: String,
+        game_server_url: Url,
+        shutdown_receiver: &mut broadcast::Receiver<()>,
+        ws_receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
+    ) {
+        let state = Arc::new(Mutex::new(MatchmakingServiceState {
             game_server_url,
             queue: VecDeque::new(),
             users_in_queue: HashSet::new(),
             games: Vec::new(),
-        }
+        }));
+
+        // Thread to poll and push messages back to the websocket service
+        let forward_socket_shutdown_receiver = shutdown_receiver.resubscribe();
+        let forward_socket_handle = tokio::spawn(async move {
+            Self::forward_socket_thread(
+                state.clone(),
+                forward_socket_shutdown_receiver,
+                ws_receiver,
+            )
+            .await
+        });
+
+        // REST thread
+        let rest_shutdown_receiver = shutdown_receiver.resubscribe();
+        let rest_handle: JoinHandle<()> = tokio::spawn(async move {
+            Self::rest_endpoint_thread(rest_address, rest_shutdown_receiver).await
+        });
+
+        forward_socket_handle
+            .await
+            .expect("Socket listener exited non-gracefully");
+
+        rest_handle
+            .await
+            .expect("REST endpoint exited non-gracefully");
     }
 
-    pub fn add_user(&mut self, player: Player) {
-        let user_id = player.clone().id;
-        if self.users_in_queue.contains(&user_id) {
-            warn!("User {:?} was already in the queue", user_id);
-            return;
-        }
-        info!("Adding user {:?} to queue", user_id);
-        self.queue.push_back(player);
-        self.users_in_queue.insert(user_id);
-    }
-
-    pub async fn run(
-        &mut self,
-        shutdown_receiver: &mut broadcast::Receiver<()>,
+    async fn forward_socket_thread(
+        state: Arc<Mutex<MatchmakingServiceState>>,
+        mut shutdown_receiver: broadcast::Receiver<()>,
         ws_receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
-    ) -> Result<()> {
+    ) {
         let mut receiver = ws_receiver.lock().await;
         let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
 
@@ -111,24 +164,93 @@ impl MatchmakingService {
                     break
                 }
                 message = receiver.recv() => {
-                    self.handle_message(message).await;
+                    Self::handle_message(state.clone(), message).await;
                 }
                 _ = interval.tick() => {
-                    self.read_queue().await?;
+                    Self::read_queue(state.clone()).await.expect("Failed to read internal queue");
                 }
             }
         }
         info!("Exiting matchmaking service");
+    }
+
+    async fn rest_endpoint_thread(address: String, mut shutdown_receiver: broadcast::Receiver<()>) {
+        let app: Router = Router::new()
+            .layer(TraceLayer::new_for_http())
+            .route("/", get(Self::root))
+            .route("/game/result", post(Self::post_game_result));
+        let listener = tokio::net::TcpListener::bind(address.clone())
+            .await
+            .unwrap();
+        info!("Game manager listening on {}", address);
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async move {
+                shutdown_receiver
+                    .recv()
+                    .await
+                    .expect("Failed to receive shutdown signal");
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn root() -> &'static str {
+        "Hello, World!"
+    }
+
+    async fn post_game_result(Json(request): Json<PostGameResultsRequest>) -> Response {
+        match Self::write_game_result_and_update_elo(request).await {
+            Ok(_) => StatusCode::CREATED.into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        }
+    }
+
+    async fn write_game_result_and_update_elo(request: PostGameResultsRequest) -> Result<()> {
+        // Insert results into db
+        let connection = Connection::open("match_results.db")?;
+        connection.execute(
+            "INSERT INTO match_results (id, player_1_score, player_2_score) VALUES (?1, ?2, ?3)",
+            (
+                &request.game_id.to_string(),
+                request.games_won.0,
+                request.games_won.1,
+            ),
+        )?;
+
+        // Update ELO
+        // TODO: impl
+
         Ok(())
     }
 
-    // POST to game-server to create a game thread
-    async fn create_game(&self, players: Vec<Id>) -> Result<CreateGameResponse> {
+    async fn create_game(game_server_url: &Url, players: (Id, Id)) -> Result<CreateGameResponse> {
+        let game_id = &Id::new();
+        let games_to_win = 3u8;
+        // Create entry in database
+        let connection = Connection::open("match_results.db")?; // TODO: somehow DI this param. pass in as state?
+        connection.execute(
+            "INSERT INTO match (
+                id,
+                player_1_id,
+                player_2_id,
+                games_to_win
+            ) VALUES (
+                ?1, ?2, ?3, ?4
+            )",
+            (
+                game_id.to_string(),
+                players.0.to_string(),
+                players.1.to_string(),
+                games_to_win,
+            ),
+        )?;
+
+        // POST to game server to create a game threwd
         let request = CreateGameRequest {
-            players,
-            games_to_win: 3,
+            players: vec![players.0, players.1],
+            games_to_win,
         };
-        let url = self.game_server_url.join("create_game")?;
+        let url = game_server_url.join("create_game")?;
         // TODO: retry logic?
         Ok(Client::new()
             .post(url)
@@ -139,7 +261,11 @@ impl MatchmakingService {
             .await?)
     }
 
-    async fn handle_message(&mut self, message: Option<MatchmakingRequest>) {
+    async fn handle_message(
+        state: Arc<Mutex<MatchmakingServiceState>>,
+        message: Option<MatchmakingRequest>,
+    ) {
+        let mut state = state.lock().await;
         debug!("msg: {:?}", message);
         let Some(message) = message else {
             info!("Got empty message");
@@ -151,22 +277,22 @@ impl MatchmakingService {
                 if sender.is_closed() {
                     warn!("Sender {:?} is closed!", player.id);
                 }
-                self.add_user(player);
+                state.add_user(player);
                 let result = sender.send(ClientResponse::JoinedQueue).await;
                 if let Err(err) = result {
                     error!("Got error when sending MatchmakingResponse: {}", err);
                 }
             }
-            MatchmakingRequest::LeaveQueue(user_id) => match self.users_in_queue.get(&user_id) {
+            MatchmakingRequest::LeaveQueue(user_id) => match state.users_in_queue.get(&user_id) {
                 Some(_) => {
-                    let position = self
+                    let position = state
                         .queue
                         .iter()
                         .enumerate()
                         .find(|(_, user)| user.id == user_id);
                     if let Some((position, user)) = position {
                         info!("Removing user {:?} from queue", user.id);
-                        self.queue.remove(position);
+                        state.queue.remove(position);
                     } else {
                         warn!(
                             "User {:?} was in users_in_queue but not in actual queue",
@@ -177,5 +303,11 @@ impl MatchmakingService {
                 None => warn!("User {:?} not in queue", user_id),
             },
         };
+    }
+}
+
+impl Default for MatchmakingService {
+    fn default() -> Self {
+        Self::new()
     }
 }
