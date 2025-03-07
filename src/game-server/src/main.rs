@@ -15,7 +15,7 @@ async fn main() {
         .with_max_level(Level::DEBUG)
         .init();
     let shutdown_receiver = create_shutdown_channel().await;
-    let manager_address = "0.0.0.0:8080".to_owned();
+    let manager_address = "0.0.0.0:8082".to_owned();
     let socket_address = "0.0.0.0:3002".to_owned();
     serve(manager_address, socket_address, shutdown_receiver, None).await;
 }
