@@ -1,7 +1,6 @@
 use core::error;
 use std::{
     collections::{HashSet, VecDeque},
-    path::Path,
     sync::Arc,
 };
 
@@ -36,12 +35,12 @@ pub struct Game {
 pub struct MatchmakingConfig {
     pub socket_address: String,
     pub rest_address: String,
-    pub db_file: &'static Path,
-    pub game_server_url: Url,
+    pub db_file: String,
+    pub game_server_url: String,
 }
 
 struct MatchmakingServiceState {
-    pub config: &'static MatchmakingConfig,
+    pub game_server_url: Url,
     pub queue: VecDeque<Player>,
     pub users_in_queue: HashSet<Id>,
     pub games: Vec<Game>,
@@ -85,7 +84,7 @@ impl MatchmakingService {
 
             // Create game
             let response =
-                Self::create_game(&state.config.game_server_url, (player1.id, player2.id)).await?;
+                Self::create_game(&state.game_server_url, (player1.id, player2.id)).await?;
 
             // TODO: do we need to keep track of this? only thing we store in here is
             // the player's sender, and players will disconnect immediately anyways
@@ -123,10 +122,12 @@ impl MatchmakingService {
         shutdown_receiver: &mut broadcast::Receiver<()>,
         ws_receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
     ) {
-        let rest_address = config.rest_address; // Copy rest_address address before moving config into
-                                                // state
+        let rest_address = config.rest_address.clone(); // Copy rest_address address before moving config into
+        let game_server_url =
+            Url::parse(&config.game_server_url).expect("Failed to parse game server url");
+        // state
         let state = Arc::new(Mutex::new(MatchmakingServiceState {
-            config,
+            game_server_url,
             queue: VecDeque::new(),
             users_in_queue: HashSet::new(),
             games: Vec::new(),
@@ -146,7 +147,7 @@ impl MatchmakingService {
         // REST thread
         let rest_shutdown_receiver = shutdown_receiver.resubscribe();
         let rest_handle: JoinHandle<()> = tokio::spawn(async move {
-            Self::rest_endpoint_thread(rest_address, rest_shutdown_receiver).await
+            Self::rest_endpoint_thread(&rest_address, rest_shutdown_receiver).await
         });
 
         forward_socket_handle
