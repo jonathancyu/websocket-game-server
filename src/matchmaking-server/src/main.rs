@@ -1,4 +1,3 @@
-use common::reqwest::Url;
 use common::utility::{create_shutdown_channel, Channel};
 use common::websocket::WebsocketHandler;
 use matchmaking_server::service::matchmaking::MatchmakingConfig;

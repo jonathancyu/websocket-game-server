@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fmt::{Debug, Display},
+    fmt::Debug,
     fs,
     time::Duration,
 };
