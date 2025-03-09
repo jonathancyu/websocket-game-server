@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "src/common",
-    "src/central-server",
+    "src/matchmaking-server",
     "src/game-server",
 ]
 resolver = "2"

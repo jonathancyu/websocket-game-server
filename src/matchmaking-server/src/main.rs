@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use central_server::service::matchmaking::MatchmakingConfig;
 use central_server::service::{matchmaking::MatchmakingService, queue_socket::QueueSocket};
 use common::reqwest::Url;
 use common::utility::{create_shutdown_channel, Channel};
@@ -8,12 +9,6 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::Level;
 
 // TODO: adopt this
-pub struct CentralServerConfig {
-    pub websocket_url: Url,
-    pub game_socket_url: Url,
-    pub db_file: Path,
-}
-
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -22,9 +17,12 @@ async fn main() {
         .with_max_level(Level::DEBUG)
         .init();
     // Config
-    let websocket_url = "0.0.0.0:3001".to_owned();
-    let matchmaking_rest_url = "0.0.0.0:8081".to_owned();
-    let game_server_url = Url::parse("http://0.0.0.0:8082").unwrap();
+    let config = MatchmakingConfig {
+        socket_address: "0.0.0.0:3001",
+        rest_address: "0.0.0.0:8081",
+        game_server_url: "http://0.0.0.0:8082",
+        db_file: "matchmaking.db",
+    };
 
     // Channels for communication between matchmaker and websockets
     let to_mm_channel = Channel::from(mpsc::channel(100));
@@ -36,18 +34,13 @@ async fn main() {
     // Spawn thread for matchmaking
     let matchmaker_handle: JoinHandle<()> = tokio::spawn(async move {
         MatchmakingService::new()
-            .run(
-                matchmaking_rest_url,
-                game_server_url,
-                &mut mm_shutdown_receiver,
-                to_mm_channel.receiver,
-            )
+            .run(config, &mut mm_shutdown_receiver, to_mm_channel.receiver)
             .await
     });
     let websocket_handle: JoinHandle<()> = tokio::spawn(async move {
         QueueSocket::new()
             .listen(
-                websocket_url,
+                config.socket_address,
                 &mut ws_shutdown_receiver,
                 to_mm_channel.sender,
             )

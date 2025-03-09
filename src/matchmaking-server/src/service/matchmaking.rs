@@ -1,6 +1,7 @@
 use core::error;
 use std::{
     collections::{HashSet, VecDeque},
+    path::Path,
     sync::Arc,
 };
 
@@ -31,8 +32,16 @@ pub struct Game {
     pub server_address: Url,
 }
 
-struct MatchmakingServiceState {
+#[derive(Clone)]
+pub struct MatchmakingConfig {
+    pub socket_address: String,
+    pub rest_address: String,
+    pub db_file: &'static Path,
     pub game_server_url: Url,
+}
+
+struct MatchmakingServiceState {
+    pub config: &'static MatchmakingConfig,
     pub queue: VecDeque<Player>,
     pub users_in_queue: HashSet<Id>,
     pub games: Vec<Game>,
@@ -76,7 +85,7 @@ impl MatchmakingService {
 
             // Create game
             let response =
-                Self::create_game(&state.game_server_url, (player1.id, player2.id)).await?;
+                Self::create_game(&state.config.game_server_url, (player1.id, player2.id)).await?;
 
             // TODO: do we need to keep track of this? only thing we store in here is
             // the player's sender, and players will disconnect immediately anyways
@@ -110,13 +119,14 @@ impl MatchmakingService {
 
     pub async fn run(
         &self,
-        rest_address: String,
-        game_server_url: Url,
+        config: MatchmakingConfig,
         shutdown_receiver: &mut broadcast::Receiver<()>,
         ws_receiver: Arc<Mutex<Receiver<MatchmakingRequest>>>,
     ) {
+        let rest_address = config.rest_address; // Copy rest_address address before moving config into
+                                                // state
         let state = Arc::new(Mutex::new(MatchmakingServiceState {
-            game_server_url,
+            config,
             queue: VecDeque::new(),
             users_in_queue: HashSet::new(),
             games: Vec::new(),
@@ -174,7 +184,10 @@ impl MatchmakingService {
         info!("Exiting matchmaking service");
     }
 
-    async fn rest_endpoint_thread(address: String, mut shutdown_receiver: broadcast::Receiver<()>) {
+    async fn rest_endpoint_thread(
+        address: &String,
+        mut shutdown_receiver: broadcast::Receiver<()>,
+    ) {
         let app: Router = Router::new()
             .layer(TraceLayer::new_for_http())
             .route("/", get(Self::root))
