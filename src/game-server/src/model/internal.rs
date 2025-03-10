@@ -1,4 +1,7 @@
-use common::model::messages::Id;
+use common::model::{
+    game::{Move, Outcome},
+    messages::Id,
+};
 use tokio::sync::mpsc::Sender;
 
 use serde::{Deserialize, Serialize};
@@ -13,36 +16,8 @@ pub struct PlayerHandle {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum Result {
-    Win,
-    Loss,
-    Draw,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum Move {
-    Rock,
-    Paper,
-    Scissors,
-}
-impl Move {
-    pub fn beats(&self, other: &Move) -> Option<bool> {
-        if self == other {
-            None
-        } else {
-            Some(matches!(
-                (self, other),
-                (Move::Rock, Move::Scissors)
-                    | (Move::Scissors, Move::Paper)
-                    | (Move::Paper, Move::Rock)
-            ))
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct RoundResult {
-    pub result: Result,
+pub struct RoundResultResponse {
+    pub result: Outcome,
     pub other_move: Move,
 }
 

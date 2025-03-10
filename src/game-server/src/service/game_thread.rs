@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use common::model::messages::Id;
+use common::model::{
+    game::{self, Move},
+    messages::Id,
+};
 use itertools::Itertools;
 use tokio::sync::{
     broadcast,
@@ -10,7 +13,7 @@ use tracing::{debug, warn};
 
 use crate::model::{
     external::{ClientRequest, ClientResponse},
-    internal::{self, GameRequest, Move, PlayerHandle, RoundResult},
+    internal::{self, GameRequest, PlayerHandle, RoundResultResponse},
 };
 
 #[derive(Clone)]
@@ -166,12 +169,12 @@ impl GameState {
             player
                 .sender
                 .send(match player.id == winner {
-                    true => ClientResponse::RoundResult(RoundResult {
-                        result: internal::Result::Win,
+                    true => ClientResponse::RoundResult(RoundResultResponse {
+                        result: game::Outcome::Win,
                         other_move,
                     }),
-                    false => ClientResponse::RoundResult(RoundResult {
-                        result: internal::Result::Loss,
+                    false => ClientResponse::RoundResult(RoundResultResponse {
+                        result: game::Outcome::Loss,
                         other_move,
                     }),
                 })
@@ -182,8 +185,8 @@ impl GameState {
     async fn notify_match_result(&self, winner: Id) {
         for player in self.players.values() {
             let result = match player.id == winner {
-                true => internal::Result::Win,
-                false => internal::Result::Loss,
+                true => game::Outcome::Win,
+                false => game::Outcome::Loss,
             };
             player
                 .sender

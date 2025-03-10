@@ -5,7 +5,6 @@ use matchmaking_server::service::{matchmaking::MatchmakingService, queue_socket:
 use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::Level;
 
-// TODO: adopt this
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
