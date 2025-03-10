@@ -70,6 +70,7 @@ async fn serve(
 mod tests {
     use std::collections::HashMap;
 
+    use common::message::game_server::{ClientRequest, ClientResponse};
     use common::reqwest::{Client, StatusCode};
     use common::{
         model::messages::{
@@ -79,7 +80,6 @@ mod tests {
         test::{ServerAddress, TestCase},
     };
     use futures_util::{SinkExt, StreamExt};
-    use game_server::model::external::{ClientRequest, ClientResponse};
     use serde_json::json;
     use tokio::{net::UdpSocket, sync::broadcast};
     use tokio_tungstenite::{connect_async, tungstenite::Message};

@@ -1,10 +1,7 @@
-
-use crate::model::{
-    external::{ClientRequest, ClientResponse},
-    internal::{GameRequest, PlayerHandle},
-};
+use crate::model::internal::{GameRequest, PlayerHandle};
 use async_trait::async_trait;
 use common::{
+    message::game_server::{ClientRequest, ClientResponse},
     model::messages::Id,
     websocket::WebsocketHandler,
 };

@@ -1,7 +1,11 @@
-use common::model::game::{Move, Outcome};
+use crate::model::game::{Move, Outcome};
 use serde::{Deserialize, Serialize};
 
-use super::internal::RoundResultResponse;
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct RoundResultResponse {
+    pub result: Outcome,
+    pub other_move: Move,
+}
 
 // Client types
 #[derive(Serialize, Deserialize, Debug, Clone)]

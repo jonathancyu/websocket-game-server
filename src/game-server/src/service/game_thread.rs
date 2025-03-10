@@ -1,8 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
-use common::model::{
-    game::{self, Move},
-    messages::Id,
+use common::{
+    message::game_server::{ClientRequest, ClientResponse, RoundResultResponse},
+    model::{
+        game::{self, Move},
+        messages::Id,
+    },
 };
 use itertools::Itertools;
 use tokio::sync::{
@@ -11,10 +14,7 @@ use tokio::sync::{
 };
 use tracing::{debug, warn};
 
-use crate::model::{
-    external::{ClientRequest, ClientResponse},
-    internal::{self, GameRequest, PlayerHandle, RoundResultResponse},
-};
+use crate::model::internal::{GameRequest, PlayerHandle};
 
 #[derive(Clone)]
 pub struct GameConfiguration {
