@@ -3,5 +3,6 @@ members = [
     "src/common",
     "src/matchmaking-server",
     "src/game-server",
+    "src/agent",
 ]
 resolver = "2"
