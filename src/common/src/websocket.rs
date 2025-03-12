@@ -20,7 +20,7 @@ use tokio_tungstenite::{
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    model::messages::{Id, OpenSocketRequest, SocketRequest, SocketResponse},
+    model::messages::{Id, OpenSocketRequest},
     utility::Channel,
 };
 
@@ -140,12 +140,12 @@ where
                 // Poll connection for any push messages
                 msg = to_user_receiver.recv() => {
                     let Some(msg) = msg else { continue };
-                    let Some(response) =Self::handle_internal_message(user_id, msg).await else { return };
+                    let Some(response) = Self::handle_internal_message(msg).await else { return };
                     let response_body = serde_json::to_string(&response).expect("Could not serialize response.");
                     ws_sender.send(Message::Text(response_body)).await.unwrap();
 
                     // Drop connection according to criteria
-                    close_socket |= Self::drop_after_send(response.body);
+                    close_socket |= Self::drop_after_send(response);
                 }
 
                 // Otherwise, handle incoming messages
@@ -169,7 +169,7 @@ where
                     ws_sender.send(Message::Text(response_body)).await.unwrap();
 
                     // Drop connection according to criteria
-                    close_socket |= Self::drop_after_send(response.body);
+                    close_socket |= Self::drop_after_send(response);
                 }
             };
             if close_socket {
@@ -190,28 +190,25 @@ where
         message: Message,
         to_user: Sender<ExternalRS>,
         to_internal: Sender<InternalRQ>,
-    ) -> Result<Option<SocketResponse<ExternalRS>>, &'static str> {
+    ) -> Result<Option<ExternalRS>, &'static str> {
         if !message.is_text() {
             return Err("Got non-text message :(");
         }
 
         // Deserialize request
         let body = message.to_text().unwrap();
-        let request: SocketRequest<ExternalRQ> =
+        let request: ExternalRQ =
             serde_json::from_str(body).expect("Could not deserialize request.");
 
-        let response = Self::respond_to_request(user_id, request.body, to_user, to_internal).await;
+        let response = Self::respond_to_request(user_id, request, to_user, to_internal).await;
 
-        Ok(response.map(|body| SocketResponse { user_id, body }))
+        Ok(response)
     }
 
     // Read internal message to potentially forward to the user.
-    async fn handle_internal_message(
-        user_id: Id,
-        body: ExternalRS,
-    ) -> Option<SocketResponse<ExternalRS>> {
+    async fn handle_internal_message(body: ExternalRS) -> Option<ExternalRS> {
         // If message was sent, forward to user
-        Some(SocketResponse { user_id, body })
+        Some(body)
     }
 
     // Criterion to drop connection. By default, always keep the connection alive.

@@ -26,20 +26,14 @@
       "type": "SocketSend",
       "name": "user1",
       "request": {
-        "userId": "${user1}",
-        "body": {
-          "type": "JoinGame"
-        }
+        "type": "JoinGame"
       }
     },
     {
       "type": "SocketReceive",
       "name": "user1",
       "response": {
-        "userId": "${user1}",
-        "body": {
-          "type": "GameJoined"
-        }
+        "type": "GameJoined"
       }
     },
     {
@@ -51,20 +45,14 @@
       "type": "SocketSend",
       "name": "user2",
       "request": {
-        "userId": "${user2}",
-        "body": {
-          "type": "JoinGame"
-        }
+        "type": "JoinGame"
       }
     },
     {
       "type": "SocketReceive",
       "name": "user2",
       "response": {
-        "userId": "${user2}",
-        "body": {
-          "type": "GameJoined"
-        }
+        "type": "GameJoined"
       }
     },
     {
@@ -75,66 +63,48 @@
       "type": "SocketReceive",
       "name": "user1",
       "response": {
-        "userId": "${user1}",
-        "body": {
-          "type": "PendingMove"
-        }
+        "type": "PendingMove"
       }
     },
     {
       "type": "SocketReceive",
       "name": "user2",
       "response": {
-        "userId": "${user2}",
-        "body": {
-          "type": "PendingMove"
-        }
+        "type": "PendingMove"
       }
     },
     {
       "type": "SocketSend",
       "name": "user1",
       "request": {
-        "userId": "${user1}",
-        "body": {
-          "type": "Move",
-          "value": "Rock"
-        }
+        "type": "Move",
+        "value": "Rock"
       }
     },
     {
       "type": "SocketSend",
       "name": "user2",
       "request": {
-        "userId": "${user2}",
-        "body": {
-          "type": "Move",
-          "value": "Paper"
-        }
+        "type": "Move",
+        "value": "Paper"
       }
     },
     {
       "type": "SocketReceive",
       "name": "user1",
       "response": {
-        "userId": "${user1}",
-        "body": {
-          "type": "RoundResult",
-          "result": "Loss",
-          "other_move": "Paper"
-        }
+        "type": "RoundResult",
+        "result": "Loss",
+        "other_move": "Paper"
       }
     },
     {
       "type": "SocketReceive",
       "name": "user2",
       "response": {
-        "userId": "${user2}",
-        "body": {
-          "type": "RoundResult",
-          "result": "Win",
-          "other_move": "Rock"
-        }
+        "type": "RoundResult",
+        "result": "Win",
+        "other_move": "Rock"
       }
     },
     {
@@ -145,72 +115,54 @@
       "type": "SocketSend",
       "name": "user1",
       "request": {
-        "userId": "${user1}",
-        "body": {
-          "type": "Move",
-          "value": "Rock"
-        }
+        "type": "Move",
+        "value": "Rock"
       }
     },
     {
       "type": "SocketSend",
       "name": "user2",
       "request": {
-        "userId": "${user2}",
-        "body": {
-          "type": "Move",
-          "value": "Paper"
-        }
+        "type": "Move",
+        "value": "Paper"
       }
     },
     {
       "type": "SocketReceive",
       "name": "user1",
       "response": {
-        "userId": "${user1}",
-        "body": {
-          "type": "RoundResult",
-          "result": "Loss",
-          "other_move": "Paper"
-        }
+        "type": "RoundResult",
+        "result": "Loss",
+        "other_move": "Paper"
       }
     },
     {
       "type": "SocketReceive",
       "name": "user2",
       "response": {
-        "userId": "${user2}",
-        "body": {
-          "type": "RoundResult",
-          "result": "Win",
-          "other_move": "Rock"
-        }
+        "type": "RoundResult",
+        "result": "Win",
+        "other_move": "Rock"
       }
     },
     {
       "type": "SocketReceive",
       "name": "user1",
       "response": {
-        "userId": "${user1}",
-        "body": {
-          "type": "MatchResult",
-          "result": "Loss",
-          "wins": 0,
-          "total": 2
-        }
+        "type": "MatchResult",
+        "result": "Loss",
+        "wins": 0,
+        "total": 2
       }
     },
     {
       "type": "SocketReceive",
       "name": "user2",
       "response": {
-        "userId": "${user2}",
-        "body": {
-          "type": "MatchResult",
-          "result": "Win",
-          "wins": 2,
-          "total": 2
-        }
+        "type": "MatchResult",
+        "result": "Win",
+        "wins": 2,
+        "total": 2
       }
     }
   ]

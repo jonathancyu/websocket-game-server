@@ -11,7 +11,7 @@ use tokio::{net::TcpStream, time::timeout};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, info};
 
-use crate::model::messages::{Id, OpenSocketRequest, SocketRequest, SocketResponse};
+use crate::model::messages::{Id, OpenSocketRequest};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -25,11 +25,11 @@ where
     },
     SocketSend {
         name: String,
-        request: SocketRequest<RQ>,
+        request: RQ,
     },
     SocketReceive {
         name: String,
-        response: SocketResponse<RS>,
+        response: RS,
     },
     Post {
         name: String,
@@ -134,7 +134,7 @@ where
                         })
                         .expect("No message found")
                         .expect("Failed to read message");
-                    let response: SocketResponse<RS> = serde_json::from_str(
+                    let response: RS = serde_json::from_str(
                         body.to_text().expect("Failed to convert response to text"),
                     )
                     .expect("Failed to deserialize response");

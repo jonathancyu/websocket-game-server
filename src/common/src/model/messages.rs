@@ -51,24 +51,6 @@ pub struct OpenSocketRequest {
     pub user_id: Id,
 }
 
-// TODO: With the new OpenSocketRequest protocol, we don't need the SocketRequest wrapper anymore.
-#[derive(Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SocketRequest<T> {
-    pub user_id: Option<Id>, // TODO: remove optional
-    pub body: T,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub struct SocketResponse<T>
-where
-    T: Serialize,
-{
-    pub user_id: Id, // TODO: in here?
-    pub body: T,
-}
-
 // Matchmaking <-> Game server interface
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct CreateGameRequest {

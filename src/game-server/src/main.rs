@@ -75,14 +75,12 @@ mod tests {
     use common::{
         model::messages::{
             CreateGameRequest, CreateGameResponse, GetGameRequest, GetGameResponse, Id,
-            SocketRequest,
         },
         test::{ServerAddress, TestCase},
     };
     use futures_util::{SinkExt, StreamExt};
     use serde_json::json;
     use tokio::{net::UdpSocket, sync::broadcast};
-    use tokio_tungstenite::{connect_async, tungstenite::Message};
     use tracing::debug;
 
     use super::*;

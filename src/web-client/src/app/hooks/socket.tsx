@@ -7,15 +7,6 @@ export enum ConnectionStatus {
   Failed = "Failed",
 }
 
-export type SocketRequest<T> = {
-  userId: string | null;
-  body: T;
-};
-export type SocketResponse<T> = {
-  userId: string | null;
-  body: T;
-};
-
 // TODO: Can I not just make a class...???
 export type SocketHook<RQ, RS> = {
   // Fields
@@ -43,11 +34,7 @@ export default function useWebSocket<RQ, RS>(
   const [socket, setSocket] = useState<WebSocket | null>(null);
 
   const send = (socket: WebSocket, request: RQ) => {
-    const payload: SocketRequest<RQ> = {
-      userId,
-      body: request,
-    };
-    const as_string = JSON.stringify(payload);
+    const as_string = JSON.stringify(request);
     socket.send(as_string);
     console.log("Sent " + as_string);
   };
@@ -79,8 +66,8 @@ export default function useWebSocket<RQ, RS>(
     };
 
     newSocket.onmessage = (event) => {
-      const message = JSON.parse(event.data) as SocketResponse<RS>;
-      onMessage(message.body);
+      const message = JSON.parse(event.data) as RS;
+      onMessage(message);
     };
 
     // Fires when socket is closed by SERVER
