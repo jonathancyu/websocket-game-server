@@ -219,43 +219,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn simulate_full_game() {
-        let server = TestServer::new().await;
-
-        // Create game
-        let player_1 = Id::new();
-        let player_2 = Id::new();
-        let request = CreateGameRequest {
-            players: vec![player_1, player_2],
-            games_to_win: 3,
-        };
-        let response = Client::new()
-            .post(url("http", server.manager_address.clone(), "create_game"))
-            .json(&request)
-            .send()
-            .await
-            .inspect_err(|e| eprintln!("{}", e))
-            .expect("Request failed");
-        assert_eq!(response.status(), StatusCode::CREATED);
-
-        // Make each player join
-        let (ws_stream_1, _) = connect_async(format!("ws://{}", server.socket_address.clone()))
-            .await
-            .unwrap();
-        let (mut write_1, mut read_1) = ws_stream_1.split();
-        let req = SocketRequest {
-            user_id: Some(player_1),
-            body: ClientRequest::JoinGame,
-        };
-        let body: String = json!(req).to_string();
-        write_1.send(Message::text(body)).await.unwrap();
-        let resp = tokio::time::timeout(tokio::time::Duration::from_secs(1), read_1.next())
-            .await
-            .expect("Response timed out");
-        println!("socket resp {:?}", resp);
-    }
-
-    #[tokio::test]
     async fn run_game() {
         let server = TestServer::new().await;
         let file_path = env!("CARGO_MANIFEST_DIR").to_string() + "/tests/data/full_game.json";

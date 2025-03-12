@@ -12,7 +12,7 @@ use tokio::sync::{
     broadcast,
     mpsc::{self, Receiver},
 };
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::model::internal::{GameRequest, PlayerHandle};
 
@@ -144,6 +144,7 @@ impl GameState {
                         self.rounds_played += 1;
                     }
                 };
+                // BUG: this always sets to PendingMoves, even if the state is Done
                 self.phase = GamePhase::PendingMoves {
                     moves: HashMap::new(),
                 };
@@ -216,6 +217,7 @@ impl GameState {
     }
 }
 
+#[derive(Debug)]
 enum GamePhase {
     WaitingForPlayers { connected: HashSet<Id> },
     PendingMoves { moves: HashMap<Id, Move> },

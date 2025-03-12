@@ -1,9 +1,4 @@
-use std::{
-    collections::HashMap,
-    fmt::Debug,
-    fs,
-    time::Duration,
-};
+use std::{collections::HashMap, fmt::Debug, fs, time::Duration};
 
 use futures_util::{
     stream::{SplitSink, SplitStream},
