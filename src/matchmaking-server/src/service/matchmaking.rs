@@ -239,7 +239,7 @@ impl MatchmakingService {
 
     async fn create_game(game_server_url: &Url, players: (Id, Id)) -> Result<CreateGameResponse> {
         let game_id = &Id::new();
-        let games_to_win = 3u8;
+        let games_to_win = 1u8;
         // Create entry in database
         let connection = Connection::open("match_results.db")?; // TODO: somehow DI this param. pass in as state?
         connection.execute(
