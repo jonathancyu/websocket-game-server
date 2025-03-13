@@ -90,7 +90,7 @@ export default function Game({
       popEvent();
     };
     consumeNextEvent();
-  }, [gameState.type, stateStack, animating]);
+  }, [gameState, stateStack, animating]);
 
   // Create socket listener
   useEffect(() => {
@@ -131,7 +131,7 @@ export default function Game({
     if (socket.connectionStatus == ConnectionStatus.Off) {
       socket.connect(serverAddress, onOpenRequestProvider, messageHandler);
     }
-  }, [socket, serverAddress, gameState.type]);
+  }, [socket, serverAddress, gameState]);
 
   const makeMove = (move: Move) => {
     socket.send({ type: "Move", value: move });
