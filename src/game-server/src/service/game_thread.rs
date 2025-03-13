@@ -136,6 +136,7 @@ impl GameState {
                             self.notify_round_result(winner_id, moves).await;
                             self.notify_match_result(winner_id).await;
                             self.phase = GamePhase::Done;
+                            return;
                         } else {
                             self.notify_round_result(winner_id, moves).await;
                         }
@@ -144,7 +145,6 @@ impl GameState {
                         self.rounds_played += 1;
                     }
                 };
-                // BUG: this always sets to PendingMoves, even if the state is Done
                 self.phase = GamePhase::PendingMoves {
                     moves: HashMap::new(),
                 };
@@ -241,6 +241,7 @@ impl GameThread {
                         state.update(request).await;
                     }
                     if matches!(state.phase, GamePhase::Done) {
+                        info!("Game over, exiting");
                         break;
                     }
                 }
