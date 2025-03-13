@@ -78,8 +78,6 @@ mod tests {
         },
         test::{ServerAddress, TestCase},
     };
-    use futures_util::{SinkExt, StreamExt};
-    use serde_json::json;
     use tokio::{net::UdpSocket, sync::broadcast};
     use tracing::debug;
 
@@ -219,7 +217,7 @@ mod tests {
     #[tokio::test]
     async fn run_game() {
         let server = TestServer::new().await;
-        let file_path = env!("CARGO_MANIFEST_DIR").to_string() + "/tests/data/full_game.json";
+        let file_path = env!("CARGO_MANIFEST_DIR").to_string() + "/test/data/full_game.json";
         let ids = [Id::new(), Id::new()];
         let replacements = vec![("user1", ids[0]), ("user2", ids[1])];
         let test_case =

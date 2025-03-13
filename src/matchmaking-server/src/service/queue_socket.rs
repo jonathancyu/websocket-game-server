@@ -3,7 +3,7 @@ use std::net::Ipv6Addr;
 use axum::async_trait;
 use common::{model::messages::Id, websocket::WebsocketHandler};
 use tokio::sync::mpsc::Sender;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::model::messages::{ClientRequest, ClientResponse, MatchmakingRequest, Player};
 
@@ -25,7 +25,11 @@ impl WebsocketHandler<ClientRequest, ClientResponse, MatchmakingRequest> for Que
                     sender: to_user_sender.clone(),
                 });
                 debug!("Send mm {:?}", mm_request);
-                mm_sender.send(mm_request).await.unwrap();
+                mm_sender
+                    .send(mm_request)
+                    .await
+                    .map_err(|e| warn!("got err {:?}", e))
+                    .expect("Failed to send message to matchmaker");
                 None
             }
             ClientRequest::Ping => Some(ClientResponse::QueuePing { time_elapsed: 0u32 }),

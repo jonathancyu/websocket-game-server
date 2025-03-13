@@ -1,0 +1,46 @@
+{
+  "sequence": [
+    {
+      "type": "Comment",
+      "text": "Join queue round 1"
+    },
+    {
+      "type": "SocketOpen",
+      "name": "user1",
+      "user_id": "${user1}"
+    },
+    {
+      "type": "SocketSend",
+      "name": "user1",
+      "request": {
+        "type": "JoinQueue"
+      }
+    },
+    {
+      "type": "SocketReceive",
+      "name": "user1",
+      "response": {
+        "type": "JoinedQueue"
+      }
+    },
+    {
+      "type": "SocketOpen",
+      "name": "user2",
+      "user_id": "${user2}"
+    },
+    {
+      "type": "SocketSend",
+      "name": "user2",
+      "request": {
+        "type": "JoinQueue"
+      }
+    },
+    {
+      "type": "SocketReceive",
+      "name": "user2",
+      "response": {
+        "type": "JoinedQueue"
+      }
+    }
+  ]
+}

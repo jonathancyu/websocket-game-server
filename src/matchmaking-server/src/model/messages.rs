@@ -20,7 +20,7 @@ pub struct Player {
 
 // API messages
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientRequest {
     // Add user to queue
@@ -31,13 +31,9 @@ pub enum ClientRequest {
     GetServer,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "type")]
 pub enum ClientResponse {
-    // Connected
-    Connected { user_id: Id },
-    // Ack user joining queue
-    AckJoinQueue, // TODO: remove
     // User actually joined queue
     JoinedQueue,
     // Constant ping to let user know still connected
@@ -47,6 +43,4 @@ pub enum ClientResponse {
     // Notify user to connect to server at given IP
     // TODO: why do we need this
     JoinServer { server_ip: Ipv6Addr },
-    // Error occurred
-    Error { message: String },
 }

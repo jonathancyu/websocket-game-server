@@ -43,6 +43,9 @@ where
     },
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct DummyType {}
+
 #[derive(Serialize, Deserialize)]
 pub struct TestCase<RQ, RS, RestRq, RestRs>
 where
