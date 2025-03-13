@@ -34,19 +34,6 @@ type AnimationMap = {
   };
 };
 
-const animations: AnimationMap = {
-  RoundResult: {
-    duration: 500,
-    component: () => (
-      <div className="fixed inset-0 flex items-center justify-center">
-        <div className="animate-bounce">
-          <Trophy className="w-16 h-16 text-yellow-500" />
-        </div>
-      </div>
-    ),
-  },
-};
-
 export default function Game({
   userId,
   serverAddress,
@@ -54,43 +41,8 @@ export default function Game({
 }: GameComponentProps) {
   const socket = useWebSocket<GameRequest, GameResponse>(userId);
   const [gameState, setGameState] = useState<GameState>({ type: "Connecting" });
-  // State reducer
-  const [stateStack, setStateStack] = useState<GameState[]>([]);
-  const [animating, setAnimating] = useState(false);
-
-  const pushState = (state: GameState) => {
-    setStateStack((stateStack) => [...stateStack, state]);
-  };
-
-  useEffect(() => {
-    const popEvent = () => {
-      if (stateStack.length === 0) return;
-
-      const newStack = [...stateStack];
-      newStack.pop();
-      setStateStack(newStack);
-      setGameState(newStack[newStack.length - 1]);
-    };
-
-    const consumeNextEvent = async () => {
-      if (stateStack.length > 0 && animating === false) {
-        const nextState = stateStack[stateStack.length - 1];
-        setGameState(nextState);
-        // Check if there's an animation for entering this state
-        const animation = animations[gameState.type];
-        if (!animation) {
-          return;
-        }
-
-        // Play animation
-        setAnimating(true);
-        await new Promise((resolve) => setTimeout(resolve, animation.duration));
-        setAnimating(false);
-      }
-      popEvent();
-    };
-    consumeNextEvent();
-  }, [gameState, stateStack, animating]);
+  const [myScore, setMyScore] = useState<number>(0);
+  const [opponentScore, setOpponentScore] = useState<number>(0);
 
   // Create socket listener
   useEffect(() => {
@@ -99,7 +51,6 @@ export default function Game({
         type: "JoinGame",
       };
     };
-    const stateStack: GameState[] = [];
 
     // Message handler
     const messageHandler = (message: GameResponse) => {
@@ -108,46 +59,84 @@ export default function Game({
         .with({ type: "GameJoined" }, () => {
           setGameState({ type: "Connected" });
         })
-        .with({ type: "PendingMove" }, (msg) => {
-          pushState(msg as GameState);
+        .with({ type: "PendingMove" }, () => {
+          setGameState({ type: "PendingMove" });
         })
         .with({ type: "RoundResult" }, ({ result, other_move }) => {
-          pushState({
-            type: "RoundResult",
-            result,
-            other_move,
-          });
+          setGameState({ type: "RoundResult", result, other_move });
+          if (result === Result.Win) {
+            setMyScore(prev => prev + 1);
+          } else if (result === Result.Loss) {
+            setOpponentScore(prev => prev + 1);
+          }
         })
         .with({ type: "MatchResult" }, ({ result, wins, total }) => {
-          pushState({
-            type: "MatchResult",
-            result,
-            wins,
-            total,
-          });
+          setGameState({ type: "MatchResult", result, wins, total });
+          if (endGameAction) {
+            endGameAction();
+          }
         })
         .otherwise((val) => console.log("TODO: " + val));
     };
     if (socket.connectionStatus == ConnectionStatus.Off) {
       socket.connect(serverAddress, onOpenRequestProvider, messageHandler);
     }
-  }, [socket, serverAddress, gameState]);
+  }, [socket, serverAddress, gameState, endGameAction]);
 
   const makeMove = (move: Move) => {
     socket.send({ type: "Move", value: move });
+    setGameState({ type: "MoveSent" });
   };
 
   const GameStateView = () => {
-    return match(gameState).otherwise((state) => (
-      <div className="font-bold">{JSON.stringify(state)}</div>
-    ));
+    return match(gameState)
+      .with({ type: "Connecting" }, () => (
+        <div className="text-yellow-500">Connecting to game server...</div>
+      ))
+      .with({ type: "Connected" }, () => (
+        <div className="text-green-500">Connected! Ready to play.</div>
+      ))
+      .with({ type: "PendingMove" }, () => (
+        <div className="text-blue-500">Your turn! Make a move.</div>
+      ))
+      .with({ type: "MoveSent" }, () => (
+        <div className="text-gray-500">Move sent, waiting for opponent...</div>
+      ))
+      .with({ type: "RoundResult" }, ({ result, other_move }) => (
+        <div className="p-4 border rounded">
+          <div className="text-xl font-bold mb-2">
+            {result === Result.Win ? "You won this round!" :
+             result === Result.Loss ? "You lost this round." :
+             "This round was a draw."}
+          </div>
+          <div>Opponent played: {other_move}</div>
+          <div className="mt-2">Score: You {myScore} - {opponentScore} Opponent</div>
+        </div>
+      ))
+      .with({ type: "MatchResult" }, ({ result, wins, total }) => (
+        <div className="p-4 border rounded bg-gray-100">
+          <div className="flex items-center justify-center mb-4">
+            {result === Result.Win && <Trophy className="text-yellow-500 mr-2" size={24} />}
+          </div>
+          <div className="text-2xl font-bold text-center mb-2">
+            {result === Result.Win ? "You Won The Match!" :
+             result === Result.Loss ? "You Lost The Match" :
+             "The Match Ended In A Draw"}
+          </div>
+          <div className="text-center">
+            Final Score: {wins} / {total}
+          </div>
+        </div>
+      ))
+      .otherwise((state) => (
+        <div className="font-bold">{JSON.stringify(state)}</div>
+      ));
   };
 
-  const CurrentAnimation = gameState && animations[gameState.type]?.component;
   return (
     <div className="flex-col gap-4 justify-center">
+
       <GameStateView />
-      {animating && CurrentAnimation && <CurrentAnimation />}
       <div>
         {Object.values(Move).map((move) => (
           <button
