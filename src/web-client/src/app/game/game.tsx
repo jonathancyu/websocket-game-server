@@ -11,7 +11,7 @@ import { Trophy } from "lucide-react";
 export type GameComponentProps = {
   userId: string;
   serverAddress: string;
-  endGameAction?: () => void;
+  endGameAction: (matchResult: Result) => void;
 };
 
 type GameState =
@@ -27,12 +27,6 @@ type GameState =
       total: number;
     };
 
-type AnimationMap = {
-  [T in GameState["type"]]?: {
-    duration: number;
-    component: () => React.ReactElement;
-  };
-};
 
 export default function Game({
   userId,
@@ -72,9 +66,7 @@ export default function Game({
         })
         .with({ type: "MatchResult" }, ({ result, wins, total }) => {
           setGameState({ type: "MatchResult", result, wins, total });
-          if (endGameAction) {
-            endGameAction();
-          }
+          endGameAction(result);
         })
         .otherwise((val) => console.log("TODO: " + val));
     };
@@ -119,9 +111,9 @@ export default function Game({
             {result === Result.Win && <Trophy className="text-yellow-500 mr-2" size={24} />}
           </div>
           <div className="text-2xl font-bold text-center mb-2">
-            {result === Result.Win ? "You Won The Match!" :
-             result === Result.Loss ? "You Lost The Match" :
-             "The Match Ended In A Draw"}
+            {result === Result.Win ? "You won the Match!" :
+             result === Result.Loss ? "You lost The Match" :
+             "The match Ended In A Draw"}
           </div>
           <div className="text-center">
             Final Score: {wins} / {total}
@@ -138,15 +130,19 @@ export default function Game({
 
       <GameStateView />
       <div>
-        {Object.values(Move).map((move) => (
-          <button
-            key={move}
-            onClick={() => makeMove(move)}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-          >
-            {move.charAt(0).toUpperCase() + move.slice(1)}
-          </button>
-        ))}
+        {(gameState.type === "Connected" ||
+          gameState.type === "PendingMove" ||
+          gameState.type === "RoundResult") &&
+          Object.values(Move).map((move) => (
+            <button
+              key={move}
+              onClick={() => makeMove(move)}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+            >
+              {move.charAt(0).toUpperCase() + move.slice(1)}
+            </button>
+          ))
+        }
       </div>
     </div>
   );
