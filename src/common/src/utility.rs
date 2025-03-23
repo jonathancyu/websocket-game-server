@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use tokio::{
+    net::UdpSocket,
     signal::{self},
     sync::{
         broadcast,
@@ -54,6 +55,25 @@ pub async fn create_shutdown_channel() -> broadcast::Receiver<()> {
     shutdown_receiver
 }
 
-// TODO: consolodate with above
-// Source: https://github.com/tokio-rs/axum/blob/main/examples/graceful-shutdown/src/main.rs
-pub async fn shutdown_signal() {}
+pub async fn random_address() -> String {
+    let socket = UdpSocket::bind("0.0.0.0:0")
+        .await
+        .expect("Failed to get random port");
+    socket
+        .local_addr()
+        .expect("Failed to unwrap local address")
+        .to_string()
+}
+pub fn url<A, B, C>(protocol: A, base_url: B, endpoint: C) -> String
+where
+    A: ToString,
+    B: ToString,
+    C: ToString,
+{
+    format!(
+        "{}://{}/{}",
+        protocol.to_string(),
+        base_url.to_string(),
+        endpoint.to_string()
+    )
+}

@@ -934,6 +934,7 @@ dependencies = [
  "axum 0.7.9",
  "common",
  "futures-util",
+ "game-server",
  "prost",
  "rusqlite",
  "serde",

@@ -1,9 +1,7 @@
-use common::utility::{create_shutdown_channel, Channel};
-use common::websocket::WebsocketHandler;
+use common::utility::create_shutdown_channel;
+use matchmaking_server::entrypoint;
 use matchmaking_server::service::matchmaking::MatchmakingConfig;
-use matchmaking_server::service::{matchmaking::MatchmakingService, queue_socket::QueueSocket};
-use tokio::{sync::mpsc, task::JoinHandle};
-use tracing::{info, Level};
+use tracing::Level;
 
 #[tokio::main]
 async fn main() {
@@ -20,49 +18,7 @@ async fn main() {
         db_url: "matchmaking.db".to_owned(),
     };
     let shutdown_receiver = create_shutdown_channel().await;
-    serve(config, shutdown_receiver, None).await;
-}
-
-async fn serve(
-    config: MatchmakingConfig,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-    ready_signal: Option<tokio::sync::oneshot::Sender<()>>,
-) {
-    // Channels for communication between matchmaker and websockets
-    let to_mm_channel = Channel::from(mpsc::channel(100));
-    // Shutdown hook
-    let mut mm_shutdown_receiver = shutdown_receiver.resubscribe();
-    let mut ws_shutdown_receiver = shutdown_receiver.resubscribe();
-
-    // Spawn thread for matchmaking
-    let config_mm = config.clone();
-    let matchmaker_handle: JoinHandle<()> = tokio::spawn(async move {
-        MatchmakingService::new()
-            .run(config_mm, &mut mm_shutdown_receiver, to_mm_channel.receiver)
-            .await
-    });
-    let websocket_handle: JoinHandle<()> = tokio::spawn(async move {
-        QueueSocket::new()
-            .listen(
-                config.socket_address.clone(),
-                &mut ws_shutdown_receiver,
-                to_mm_channel.sender,
-            )
-            .await
-    });
-
-    // Signal that the server is ready
-    if let Some(ready_signal) = ready_signal {
-        info!("Sent ready");
-        ready_signal.send(()).expect("Failed to send ready signal");
-    }
-
-    websocket_handle
-        .await
-        .expect("Matchmaking thread exited non-gracefully");
-    matchmaker_handle
-        .await
-        .expect("Matchmaking thread exited non-gracefully");
+    entrypoint::serve(config, shutdown_receiver, None).await;
 }
 
 #[cfg(test)]
@@ -72,50 +28,16 @@ mod tests {
         model::messages::Id,
         test::{ServerAddress, TestCase},
     };
+    use entrypoint::MatchmakingServer;
+    use game_server::entrypoint::GameServer;
     use matchmaking_server::model::messages::{ClientRequest, ClientResponse};
     use rusqlite::Connection;
     use std::collections::HashMap;
     use std::fs;
-    use tokio::{net::UdpSocket, sync::broadcast};
+    use tokio::net::UdpSocket;
     use tracing::debug;
 
     use super::*;
-    struct TestServer {
-        pub rest_address: String,
-        pub socket_address: String,
-        shutdown_sender: broadcast::Sender<()>,
-    }
-    impl TestServer {
-        pub async fn new(config: MatchmakingConfig) -> Self {
-            // Init logging, ignore error if already set
-            let _ = tracing_subscriber::fmt()
-                .with_line_number(true)
-                .with_file(true)
-                .with_max_level(Level::DEBUG)
-                .try_init();
-
-            // Create server
-            let (shutdown_sender, shutdown_receiver) = tokio::sync::broadcast::channel(1);
-            let (ready_sender, ready_receiver) = tokio::sync::oneshot::channel::<()>();
-
-            let moved_cfg = config.clone();
-            tokio::spawn(serve(moved_cfg, shutdown_receiver, Some(ready_sender)));
-
-            // Wait for server to be ready
-            ready_receiver.await.expect("Server failed to start");
-
-            // Return server
-            TestServer {
-                shutdown_sender,
-                rest_address: config.rest_address,
-                socket_address: config.socket_address,
-            }
-        }
-        pub async fn shutdown(&self) {
-            self.shutdown_sender.send(()).expect("Failed to shutdown");
-        }
-    }
-
     async fn random_address() -> String {
         let socket = UdpSocket::bind("0.0.0.0:0")
             .await
@@ -177,7 +99,9 @@ mod tests {
             db_url,
         };
 
-        let server = TestServer::new(config).await;
+        let mm_server = MatchmakingServer::new(config).await;
+        let game_server = GameServer::new().await;
+        // let game_server = TestG
         let file_path =
             env!("CARGO_MANIFEST_DIR").to_string() + "/test/data/queue_multiple_times.json";
         let ids = [Id::new(), Id::new()];
@@ -195,18 +119,19 @@ mod tests {
         let address_lookup = HashMap::from([
             (
                 "user1".to_string(),
-                ServerAddress::WebSocket(url("ws", server.socket_address.clone(), "")),
+                ServerAddress::WebSocket(url("ws", mm_server.socket_address.clone(), "")),
             ),
             (
                 "user2".to_string(),
-                ServerAddress::WebSocket(url("ws", server.socket_address.clone(), "")),
+                ServerAddress::WebSocket(url("ws", mm_server.socket_address.clone(), "")),
             ),
             (
                 "rest".to_string(),
-                ServerAddress::RestApi(url("http", server.rest_address.clone(), "")),
+                ServerAddress::RestApi(url("http", mm_server.rest_address.clone(), "")),
             ),
         ]);
         test_case.run(address_lookup).await;
-        server.shutdown().await;
+        mm_server.shutdown().await;
+        game_server.shutdown().await;
     }
 }
