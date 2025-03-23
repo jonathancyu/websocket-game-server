@@ -41,6 +41,15 @@
       "response": {
         "type": "JoinedQueue"
       }
+    },
+    {
+      "type": "SocketReceive",
+      "name": "user1",
+      "response": {
+        "type": "MatchFound",
+        "game_id": "${game_id}",
+        "server_address": "${server_address}"
+      }
     }
   ]
 }

@@ -41,6 +41,6 @@ pub enum ClientResponse {
     // Notify user to connect to server at given IP
     MatchFound { game_id: Id, server_address: String },
     // Notify user to connect to server at given IP
-    // TODO: why do we need this
+    // TODO: implement querying for server when one goes down
     JoinServer { server_ip: Ipv6Addr },
 }

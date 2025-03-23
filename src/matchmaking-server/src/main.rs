@@ -83,7 +83,7 @@ mod tests {
         shutdown_sender: broadcast::Sender<()>,
     }
     impl TestServer {
-        pub async fn new() -> Self {
+        pub async fn new(config: MatchmakingConfig) -> Self {
             // Init logging, ignore error if already set
             let _ = tracing_subscriber::fmt()
                 .with_line_number(true)
@@ -95,18 +95,8 @@ mod tests {
             let (shutdown_sender, shutdown_receiver) = tokio::sync::broadcast::channel(1);
             let (ready_sender, ready_receiver) = tokio::sync::oneshot::channel::<()>();
 
-            let rest_address = random_address().await;
-            let socket_address = random_address().await;
-            tokio::spawn(serve(
-                MatchmakingConfig {
-                    socket_address: socket_address.clone(),
-                    rest_address: rest_address.clone(),
-                    game_server_url: "http://0.0.0.0:8082".to_owned(),
-                    db_file: "matchmaking.db".to_owned(),
-                },
-                shutdown_receiver,
-                Some(ready_sender),
-            ));
+            let moved_cfg = config.clone();
+            tokio::spawn(serve(moved_cfg, shutdown_receiver, Some(ready_sender)));
 
             // Wait for server to be ready
             ready_receiver.await.expect("Server failed to start");
@@ -114,8 +104,8 @@ mod tests {
             // Return server
             TestServer {
                 shutdown_sender,
-                rest_address,
-                socket_address,
+                rest_address: config.rest_address,
+                socket_address: config.socket_address,
             }
         }
         pub async fn shutdown(&self) {
@@ -149,11 +139,25 @@ mod tests {
 
     #[tokio::test]
     async fn run_game() {
-        let server = TestServer::new().await;
+        let rest_address = random_address().await;
+        let socket_address = random_address().await;
+        let game_server_url = "http://0.0.0.0:8082".to_owned();
+        let config = MatchmakingConfig {
+            socket_address: socket_address.clone(),
+            rest_address: rest_address.clone(),
+            game_server_url: game_server_url.clone(),
+            db_file: "matchmaking.db".to_owned(),
+        };
+        let server = TestServer::new(config).await;
         let file_path =
             env!("CARGO_MANIFEST_DIR").to_string() + "/test/data/queue_multiple_times.json";
         let ids = [Id::new(), Id::new()];
-        let replacements = vec![("user1", ids[0]), ("user2", ids[1])];
+        let replacements: Vec<(String, String)> = vec![
+            ("user1".to_string(), ids[0].to_string()),
+            ("user2".to_string(), ids[1].to_string()),
+            ("game_id".to_string(), Id::new().to_string()),
+            ("server_address".to_string(), game_server_url),
+        ];
         let test_case = TestCase::<ClientRequest, ClientResponse, DummyType, DummyType>::load(
             file_path,
             replacements,
@@ -174,5 +178,6 @@ mod tests {
             ),
         ]);
         test_case.run(address_lookup).await;
+        server.shutdown().await;
     }
 }

@@ -5,6 +5,7 @@ use std::{
 };
 
 use axum::{
+    extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -40,7 +41,7 @@ pub struct MatchmakingConfig {
 }
 
 struct MatchmakingServiceState {
-    pub game_server_url: Url,
+    pub config: MatchmakingConfig,
     pub queue: VecDeque<Player>,
     pub users_in_queue: HashSet<Id>,
     pub games: Vec<Game>,
@@ -83,8 +84,7 @@ impl MatchmakingService {
             state.users_in_queue.remove(&player2.id);
 
             // Create game
-            let response =
-                Self::create_game(&state.game_server_url, (player1.id, player2.id)).await?;
+            let response = Self::create_game(&state.config, (player1.id, player2.id)).await?;
 
             // TODO: do we need to keep track of this? only thing we store in here is
             // the player's sender, and players will disconnect immediately anyways
@@ -127,7 +127,7 @@ impl MatchmakingService {
             Url::parse(&config.game_server_url).expect("Failed to parse game server url");
         // state
         let state = Arc::new(Mutex::new(MatchmakingServiceState {
-            game_server_url,
+            config: config.clone(),
             queue: VecDeque::new(),
             users_in_queue: HashSet::new(),
             games: Vec::new(),
@@ -135,9 +135,10 @@ impl MatchmakingService {
 
         // Thread to poll and push messages back to the websocket service
         let forward_socket_shutdown_receiver = shutdown_receiver.resubscribe();
+        let socket_state = state.clone();
         let forward_socket_handle = tokio::spawn(async move {
             Self::forward_socket_thread(
-                state.clone(),
+                socket_state,
                 forward_socket_shutdown_receiver,
                 ws_receiver,
             )
@@ -147,7 +148,7 @@ impl MatchmakingService {
         // REST thread
         let rest_shutdown_receiver = shutdown_receiver.resubscribe();
         let rest_handle: JoinHandle<()> = tokio::spawn(async move {
-            Self::rest_endpoint_thread(&rest_address, rest_shutdown_receiver).await
+            Self::rest_endpoint_thread(&rest_address, rest_shutdown_receiver, state).await
         });
 
         forward_socket_handle
@@ -188,11 +189,13 @@ impl MatchmakingService {
     async fn rest_endpoint_thread(
         address: &String,
         mut shutdown_receiver: broadcast::Receiver<()>,
+        state: Arc<Mutex<MatchmakingServiceState>>,
     ) {
         let app: Router = Router::new()
             .layer(TraceLayer::new_for_http())
             .route("/", get(Self::root))
-            .route("/game/result", post(Self::post_game_result));
+            .route("/game/result", post(Self::post_game_result))
+            .with_state(state);
         let listener = tokio::net::TcpListener::bind(address.clone())
             .await
             .unwrap();
@@ -212,16 +215,23 @@ impl MatchmakingService {
         "Hello, World!"
     }
 
-    async fn post_game_result(Json(request): Json<PostGameResultsRequest>) -> Response {
-        match Self::write_game_result_and_update_elo(request).await {
+    async fn post_game_result(
+        State(state): State<Arc<Mutex<MatchmakingServiceState>>>,
+        Json(request): Json<PostGameResultsRequest>,
+    ) -> Response {
+        let db_path = state.lock().await.config.db_file.clone();
+        match Self::write_game_result_and_update_elo(db_path, request).await {
             Ok(_) => StatusCode::CREATED.into_response(),
             Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
         }
     }
 
-    async fn write_game_result_and_update_elo(request: PostGameResultsRequest) -> Result<()> {
+    async fn write_game_result_and_update_elo(
+        db_path: String,
+        request: PostGameResultsRequest,
+    ) -> Result<()> {
         // Insert results into db
-        let connection = Connection::open("match_results.db")?;
+        let connection = Connection::open(db_path)?;
         connection.execute(
             "INSERT INTO match_results (id, player_1_score, player_2_score) VALUES (?1, ?2, ?3)",
             (
@@ -237,11 +247,18 @@ impl MatchmakingService {
         Ok(())
     }
 
-    async fn create_game(game_server_url: &Url, players: (Id, Id)) -> Result<CreateGameResponse> {
+    async fn create_game(
+        config: &MatchmakingConfig,
+        players: (Id, Id),
+    ) -> Result<CreateGameResponse> {
         let game_id = &Id::new();
         let games_to_win = 1u8;
         // Create entry in database
-        let connection = Connection::open("match_results.db")?; // TODO: somehow DI this param. pass in as state?
+        println!(
+            "Current working directory: {:?}",
+            std::env::current_dir().unwrap_or_default()
+        );
+        let connection = Connection::open(&config.db_file)?; // TODO: somehow DI this param. pass in as state?
         connection.execute(
             "INSERT INTO match (
                 id,
@@ -264,7 +281,7 @@ impl MatchmakingService {
             players: vec![players.0, players.1],
             games_to_win,
         };
-        let url = game_server_url.join("create_game")?;
+        let url = Url::parse(&config.game_server_url)?.join("create_game")?;
         // TODO: retry logic?
         Ok(Client::new()
             .post(url)
