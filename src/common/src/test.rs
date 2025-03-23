@@ -10,6 +10,7 @@ use serde_json::json;
 use tokio::{net::TcpStream, time::timeout};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, info};
+use uuid::Uuid;
 
 use crate::model::messages::{Id, OpenSocketRequest};
 
@@ -67,6 +68,15 @@ enum ServerHandle {
         write: SocketWriteHandle,
     },
     RestApi(String),
+}
+
+fn substitute_ids(text: &str, id: Id) -> String {
+    // UUID regex pattern: 8-4-4-4-12 hex digits
+    let uuid_regex =
+        regex::Regex::new(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+            .expect("Failed to compile UUID regex");
+
+    return uuid_regex.replace_all(text, id.to_string()).to_string();
 }
 
 // TODO: how to pass N generics?
@@ -139,11 +149,29 @@ where
                         })
                         .expect("No message found")
                         .expect("Failed to read message");
-                    let response: RS = serde_json::from_str(
-                        body.to_text().expect("Failed to convert response to text"),
-                    )
-                    .expect("Failed to deserialize response");
-                    assert_eq!(expected, &response);
+                    let response_text = body
+                        .to_text()
+                        .expect("Failed to convert response to text")
+                        .to_string();
+
+                    // If replace_uuids is true, replace all UUIDs with a fixed value
+                    if replace_uuids.unwrap_or(false) {
+                        let id = Id::new();
+                        let response_text = substitute_ids(&response_text, id);
+                        let response: RS = serde_json::from_str(&response_text)
+                            .expect("Failed to deserialize response");
+                        // Replace ids in expected
+                        let expected_json = serde_json::to_string(&expected)
+                            .expect("Failed to serialize expected response");
+                        let expected_json = substitute_ids(&expected_json, id);
+                        let expected: RS = serde_json::from_str(&expected_json)
+                            .expect("Failed to deserialize replaced expected response");
+                        assert_eq!(expected, response);
+                    } else {
+                        let response: RS = serde_json::from_str(&response_text)
+                            .expect("Failed to deserialize response");
+                        assert_eq!(expected, &response);
+                    }
                 }
                 Event::Post {
                     name,

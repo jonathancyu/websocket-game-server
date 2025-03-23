@@ -45,6 +45,7 @@
     {
       "type": "SocketReceive",
       "name": "user1",
+      "replace_uuids": true,
       "response": {
         "type": "MatchFound",
         "game_id": "${game_id}",
