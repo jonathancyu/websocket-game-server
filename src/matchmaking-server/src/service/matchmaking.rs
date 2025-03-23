@@ -245,10 +245,6 @@ impl MatchmakingService {
         let game_id = &Id::new();
         let games_to_win = 1u8;
         // Create entry in database
-        println!(
-            "Current working directory: {:?}",
-            std::env::current_dir().unwrap_or_default()
-        );
         let connection = Connection::open(&config.db_url)?;
         connection.execute(
             "INSERT INTO match (

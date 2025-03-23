@@ -87,7 +87,7 @@ where
     }
 
     pub async fn run(&self, address_lookup: HashMap<String, ServerAddress>) {
-        let timeout_len = Duration::from_millis(50);
+        let timeout_len = Duration::from_millis(250);
         let mut server_handles = HashMap::new();
         for (id, address) in address_lookup {
             server_handles.insert(

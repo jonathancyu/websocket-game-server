@@ -89,12 +89,13 @@ mod tests {
         // Stand up servers
         let gs_config = GameServerConfig {
             manager_address: random_address().await.to_string(),
-            socket_address: random_address().await.to_string(),
+            socket_address: url("ws", random_address().await, ""),
         };
         let mm_config = MatchmakingConfig {
             socket_address: random_address().await,
             rest_address: random_address().await,
-            game_server_url: gs_config.manager_address.clone(),
+            game_server_url: url("http", gs_config.manager_address.clone(), ""), // TODO:
+            // should probably use a Url object for this field
             db_url,
         };
         let mm_server = MatchmakingServer::new(mm_config).await;
@@ -110,8 +111,8 @@ mod tests {
             ("user2".to_string(), ids[1].to_string()),
             ("game_id".to_string(), Id::new().to_string()),
             (
-                "server_address".to_string(),
-                gs_config.manager_address.clone(),
+                "game_server_address".to_string(),
+                gs_config.socket_address.clone(),
             ),
         ];
         let test_case = TestCase::<ClientRequest, ClientResponse, DummyType, DummyType>::load(

@@ -20,7 +20,7 @@ use tokio::{
 use tower_http::trace::TraceLayer;
 use tracing::{debug, info, warn};
 
-use crate::model::internal::GameRequest;
+use crate::{entrypoint::GameServerConfig, model::internal::GameRequest};
 
 use super::game_thread::{GameConfiguration, GameThread};
 
@@ -33,6 +33,7 @@ struct GameHandle {
 }
 
 struct GameManagerState {
+    config: GameServerConfig,
     games: HashMap<Id, Arc<Mutex<GameHandle>>>,
     player_assignment: HashMap<Id, Id>,
     shutdown_receiver: broadcast::Receiver<()>,
@@ -47,12 +48,13 @@ impl GameManager {
 
     pub async fn run(
         &self,
-        address: String,
+        config: GameServerConfig,
         shutdown_receiver: &mut broadcast::Receiver<()>,
         from_socket: Receiver<GameRequest>,
     ) {
         let shutdown_receiver = shutdown_receiver.resubscribe();
         let state = Arc::new(Mutex::new(GameManagerState {
+            config: config.clone(),
             games: HashMap::new(),
             player_assignment: HashMap::new(),
             shutdown_receiver: shutdown_receiver.resubscribe(),
@@ -64,7 +66,12 @@ impl GameManager {
                                         // before moving :(
         let rest_shutdown_receiver = shutdown_receiver.resubscribe();
         let rest_handle: JoinHandle<()> = tokio::spawn(async move {
-            Self::rest_endpoint_thread(address, rest_state, rest_shutdown_receiver).await
+            Self::rest_endpoint_thread(
+                config.manager_address.clone(),
+                rest_state,
+                rest_shutdown_receiver,
+            )
+            .await
         });
 
         // Spawn thread to route game messages to game threads
@@ -210,12 +217,12 @@ impl GameManager {
             "New state after creating game: {:?}",
             state.player_assignment
         );
-        let url = Url::parse("ws://0.0.0.0:3002").unwrap();
+        info!("Created game at address {:?}", state.config.socket_address);
         (
             StatusCode::CREATED,
             Json(CreateGameResponse {
                 game_id,
-                address: url.to_string(), // TODO: dynamically allocate? or is that unnecessary
+                address: state.config.socket_address.clone(), // TODO: dynamically allocate? or is that unnecessary
             }),
         )
             .into_response()

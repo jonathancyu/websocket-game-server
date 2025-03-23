@@ -27,10 +27,11 @@ pub async fn serve(
 
     // REST endpoint: listen for game creation signals from central server
     // One thread per game
+    let manager_config = config.clone();
     let manager_handle = tokio::spawn(async move {
         GameManager::new()
             .run(
-                config.manager_address,
+                manager_config,
                 &mut manager_shutdown_receiver,
                 to_game_receiver,
             )
@@ -47,10 +48,10 @@ pub async fn serve(
             .await
     });
     // Signal that the server is ready
-    if let Some(ready_signal) = ready_signal {
-        info!("Sent ready");
-        ready_signal.send(()).expect("Failed to send ready signal");
-    }
+    ready_signal
+        .unwrap()
+        .send(())
+        .expect("Failed to send ready signal");
 
     manager_handle
         .await
