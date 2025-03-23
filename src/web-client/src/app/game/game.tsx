@@ -27,7 +27,6 @@ type GameState =
       total: number;
     };
 
-
 export default function Game({
   userId,
   serverAddress,
@@ -59,9 +58,9 @@ export default function Game({
         .with({ type: "RoundResult" }, ({ result, other_move }) => {
           setGameState({ type: "RoundResult", result, other_move });
           if (result === Result.Win) {
-            setMyScore(prev => prev + 1);
+            setMyScore((prev) => prev + 1);
           } else if (result === Result.Loss) {
-            setOpponentScore(prev => prev + 1);
+            setOpponentScore((prev) => prev + 1);
           }
         })
         .with({ type: "MatchResult" }, ({ result, wins, total }) => {
@@ -97,23 +96,31 @@ export default function Game({
       .with({ type: "RoundResult" }, ({ result, other_move }) => (
         <div className="p-4 border rounded">
           <div className="text-xl font-bold mb-2">
-            {result === Result.Win ? "You won this round!" :
-             result === Result.Loss ? "You lost this round." :
-             "This round was a draw."}
+            {result === Result.Win
+              ? "You won this round!"
+              : result === Result.Loss
+                ? "You lost this round."
+                : "This round was a draw."}
           </div>
           <div>Opponent played: {other_move}</div>
-          <div className="mt-2">Score: You {myScore} - {opponentScore} Opponent</div>
+          <div className="mt-2">
+            Score: You {myScore} - {opponentScore} Opponent
+          </div>
         </div>
       ))
       .with({ type: "MatchResult" }, ({ result, wins, total }) => (
         <div className="p-4 border rounded bg-gray-100">
           <div className="flex items-center justify-center mb-4">
-            {result === Result.Win && <Trophy className="text-yellow-500 mr-2" size={24} />}
+            {result === Result.Win && (
+              <Trophy className="text-yellow-500 mr-2" size={24} />
+            )}
           </div>
           <div className="text-2xl font-bold text-center mb-2">
-            {result === Result.Win ? "You won the Match!" :
-             result === Result.Loss ? "You lost The Match" :
-             "The match Ended In A Draw"}
+            {result === Result.Win
+              ? "You won the Match!"
+              : result === Result.Loss
+                ? "You lost The Match"
+                : "The match Ended In A Draw"}
           </div>
           <div className="text-center">
             Final Score: {wins} / {total}
@@ -127,7 +134,6 @@ export default function Game({
 
   return (
     <div className="flex-col gap-4 justify-center">
-
       <GameStateView />
       <div>
         {(gameState.type === "Connected" ||
@@ -141,8 +147,7 @@ export default function Game({
             >
               {move.charAt(0).toUpperCase() + move.slice(1)}
             </button>
-          ))
-        }
+          ))}
       </div>
     </div>
   );
