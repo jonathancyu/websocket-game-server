@@ -11,6 +11,11 @@
         ],
         "games_to_win": 2
       },
+      "response": {
+        "game_id": "00000000-0000-0000-0000-000000000000",
+        "address": "${socket_address}"
+      },
+      "replace_uuids": true,
       "response_code": 201
     },
     {

@@ -8,7 +8,11 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::{net::TcpStream, time::timeout};
-use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::{http::response, Message},
+    MaybeTlsStream, WebSocketStream,
+};
 use tracing::{debug, info};
 use uuid::Uuid;
 
@@ -39,6 +43,7 @@ where
         request: RestRq,
         response_code: u16,
         response: Option<RestRs>,
+        replace_uuids: Option<bool>,
     },
     Comment {
         text: String,
@@ -87,6 +92,26 @@ where
     RestRq: Serialize + for<'de> Deserialize<'de> + Debug,
     RestRs: Serialize + for<'de> Deserialize<'de> + Debug + PartialEq,
 {
+    fn compare_with_uuid_replacement<T>(response_text: &str, expected: &T) -> T
+    where
+        T: Serialize + for<'de> Deserialize<'de> + Debug + PartialEq,
+    {
+        let id = Id::new();
+        let replaced_response_text = substitute_ids(response_text, id);
+        let response: T =
+            serde_json::from_str(&replaced_response_text).expect("Failed to deserialize response");
+
+        // Replace ids in expected
+        let expected_json =
+            serde_json::to_string(expected).expect("Failed to serialize expected response");
+        let expected_json = substitute_ids(&expected_json, id);
+        let expected: T = serde_json::from_str(&expected_json)
+            .expect("Failed to deserialize replaced expected response");
+
+        assert_eq!(expected, response);
+        response
+    }
+
     pub fn load(file_path: String, replacements: Vec<(impl ToString, impl ToString)>) -> Self {
         let mut text = fs::read_to_string(file_path).expect("Unable to read file");
         for (from, to) in replacements {
@@ -156,17 +181,7 @@ where
 
                     // If replace_uuids is true, replace all UUIDs with a fixed value
                     if replace_uuids.unwrap_or(false) {
-                        let id = Id::new();
-                        let response_text = substitute_ids(&response_text, id);
-                        let response: RS = serde_json::from_str(&response_text)
-                            .expect("Failed to deserialize response");
-                        // Replace ids in expected
-                        let expected_json = serde_json::to_string(&expected)
-                            .expect("Failed to serialize expected response");
-                        let expected_json = substitute_ids(&expected_json, id);
-                        let expected: RS = serde_json::from_str(&expected_json)
-                            .expect("Failed to deserialize replaced expected response");
-                        assert_eq!(expected, response);
+                        Self::compare_with_uuid_replacement::<RS>(&response_text, expected);
                     } else {
                         let response: RS = serde_json::from_str(&response_text)
                             .expect("Failed to deserialize response");
@@ -179,6 +194,7 @@ where
                     request,
                     response_code,
                     response: expected_response,
+                    replace_uuids,
                 } => {
                     let handle = server_handles.get(name).expect("REST API not found");
                     let ServerHandle::RestApi(address) = handle else {
@@ -195,12 +211,19 @@ where
                         .expect("Request failed");
                     debug!("Status: {:?}", response.status());
                     assert_eq!(*response_code, response.status().as_u16());
-                    match response.json::<RestRs>().await {
-                        Ok(body) => {
-                            debug!("Got response: {:?}", body)
-                        }
-                        Err(e) => {
-                            debug!("Failed to deserialize response: {:?}", e);
+                    debug!("expected_response: {:?}", expected_response);
+
+                    if let Some(expected) = expected_response {
+                        debug!("Comparing response with expected");
+                        let response_text =
+                            response.text().await.expect("Failed to get response text");
+                        if replace_uuids.unwrap_or(false) {
+                            info!("Replacing UUIDs in response ALKJSD");
+                            Self::compare_with_uuid_replacement::<RestRs>(&response_text, expected);
+                        } else {
+                            let response = serde_json::from_str::<RestRs>(&response_text)
+                                .expect("Failed to parse response");
+                            assert_eq!(expected, &response);
                         }
                     }
                 }

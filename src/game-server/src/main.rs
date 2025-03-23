@@ -116,10 +116,15 @@ mod tests {
 
     #[tokio::test]
     async fn run_game() {
-        let server = GameServer::new(make_config().await).await;
+        let config = make_config().await;
+        let server = GameServer::new(config.clone()).await;
         let file_path = env!("CARGO_MANIFEST_DIR").to_string() + "/test/data/full_game.json";
         let ids = [Id::new(), Id::new()];
-        let replacements = vec![("user1", ids[0]), ("user2", ids[1])];
+        let replacements = vec![
+            ("user1", ids[0].to_string()),
+            ("user2", ids[1].to_string()),
+            ("socket_address", config.socket_address.to_string()),
+        ];
         let test_case =
             TestCase::<ClientRequest, ClientResponse, CreateGameRequest, CreateGameResponse>::load(
                 file_path,
