@@ -30,6 +30,7 @@ where
     SocketReceive {
         name: String,
         response: RS,
+        replace_uuids: Option<bool>,
     },
     Post {
         name: String,
@@ -121,6 +122,7 @@ where
                 Event::SocketReceive {
                     name,
                     response: expected,
+                    replace_uuids,
                 } => {
                     let handle = server_handles.get_mut(name).expect("Send socket not found");
                     let ServerHandle::WebSocket {

@@ -88,8 +88,8 @@ mod tests {
 
         // Stand up servers
         let gs_config = GameServerConfig {
-            manager_address: random_address().await.to_string(),
-            socket_address: url("ws", random_address().await, ""),
+            manager_address: random_address().await,
+            socket_address: random_address().await,
         };
         let mm_config = MatchmakingConfig {
             socket_address: random_address().await,

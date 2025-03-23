@@ -39,7 +39,6 @@ struct MatchmakingServiceState {
     pub config: MatchmakingConfig,
     pub queue: VecDeque<Player>,
     pub users_in_queue: HashSet<Id>,
-    pub games: Vec<Game>,
 }
 
 impl MatchmakingServiceState {
@@ -81,16 +80,6 @@ impl MatchmakingService {
             // Create game
             let response = Self::create_game(&state.config, (player1.id, player2.id)).await?;
 
-            // TODO: do we need to keep track of this? only thing we store in here is
-            // the player's sender, and players will disconnect immediately anyways
-            let game = Game {
-                id: response.game_id,
-                player1: player1.clone(),
-                player2: player2.clone(),
-                server_address: Url::parse(&response.address)
-                    .expect("Failed to parse created game's URL"),
-            };
-
             // Notify players
             let message = ClientResponse::MatchFound {
                 game_id: response.game_id,
@@ -98,9 +87,6 @@ impl MatchmakingService {
             };
             player1.sender.send(message.clone()).await?;
             player2.sender.send(message.clone()).await?;
-
-            // Add game
-            state.games.push(game);
         }
         state.queue = unmatched_players;
 
@@ -125,7 +111,6 @@ impl MatchmakingService {
             config: config.clone(),
             queue: VecDeque::new(),
             users_in_queue: HashSet::new(),
-            games: Vec::new(),
         }));
 
         // Thread to poll and push messages back to the websocket service
