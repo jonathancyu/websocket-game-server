@@ -1,10 +1,17 @@
-use super::service::matchmaking::MatchmakingConfig;
 use super::service::{matchmaking::MatchmakingService, queue_socket::QueueSocket};
 use common::utility::Channel;
 use common::websocket::WebsocketHandler;
 use tokio::sync::broadcast;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::{info, Level};
+
+#[derive(Clone)]
+pub struct MatchmakingConfig {
+    pub socket_address: String,
+    pub rest_address: String,
+    pub db_url: String,
+    pub game_server_url: String,
+}
 
 pub async fn serve(
     config: MatchmakingConfig,
@@ -49,10 +56,10 @@ pub async fn serve(
 }
 
 pub struct MatchmakingServer {
-    pub rest_address: String,
-    pub socket_address: String,
+    pub config: MatchmakingConfig,
     shutdown_sender: broadcast::Sender<()>,
 }
+
 impl MatchmakingServer {
     pub async fn new(config: MatchmakingConfig) -> Self {
         // Init logging, ignore error if already set
@@ -75,8 +82,7 @@ impl MatchmakingServer {
         // Return server
         MatchmakingServer {
             shutdown_sender,
-            rest_address: config.rest_address,
-            socket_address: config.socket_address,
+            config,
         }
     }
     pub async fn shutdown(&self) {

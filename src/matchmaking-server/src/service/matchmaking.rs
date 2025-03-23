@@ -23,21 +23,16 @@ use tokio::{
 use tower_http::trace::TraceLayer;
 use tracing::{debug, error, info, warn};
 
-use crate::model::messages::{ClientResponse, MatchmakingRequest, Player};
+use crate::{
+    entrypoint::MatchmakingConfig,
+    model::messages::{ClientResponse, MatchmakingRequest, Player},
+};
 
 pub struct Game {
     pub id: Id,
     pub player1: Player,
     pub player2: Player,
     pub server_address: Url,
-}
-
-#[derive(Clone)]
-pub struct MatchmakingConfig {
-    pub socket_address: String,
-    pub rest_address: String,
-    pub db_url: String,
-    pub game_server_url: String,
 }
 
 struct MatchmakingServiceState {

@@ -1,5 +1,5 @@
 use common::utility::create_shutdown_channel;
-use game_server::entrypoint;
+use game_server::entrypoint::{self, GameServerConfig};
 use tracing::Level;
 
 #[tokio::main]
@@ -10,9 +10,11 @@ async fn main() {
         .with_max_level(Level::DEBUG)
         .init();
     let shutdown_receiver = create_shutdown_channel().await;
-    let manager_address = "0.0.0.0:8082".to_owned();
-    let socket_address = "0.0.0.0:3002".to_owned();
-    entrypoint::serve(manager_address, socket_address, shutdown_receiver, None).await;
+    let config = GameServerConfig {
+        manager_address: "0.0.0.0:8082".to_owned(),
+        socket_address: "0.0.0.0:3002".to_owned(),
+    };
+    entrypoint::serve(config, shutdown_receiver, None).await;
 }
 
 /// TODO: Does this belong in tests/?
@@ -24,7 +26,7 @@ mod tests {
 
     use common::message::game_server::{ClientRequest, ClientResponse};
     use common::reqwest::{Client, StatusCode};
-    use common::utility::url;
+    use common::utility::{random_address, url};
     use common::{
         model::messages::{
             CreateGameRequest, CreateGameResponse, GetGameRequest, GetGameResponse, Id,
@@ -35,15 +37,21 @@ mod tests {
     use tracing::debug;
 
     use super::*;
+    async fn make_config() -> GameServerConfig {
+        GameServerConfig {
+            manager_address: random_address().await.to_string(),
+            socket_address: random_address().await.to_string(),
+        }
+    }
 
     #[tokio::test]
     async fn serves_hello_world() {
         // Given
-        let server = GameServer::new().await;
+        let server = GameServer::new(make_config().await).await;
 
         // When
         let response = Client::new()
-            .get(url("http", server.manager_address.clone(), ""))
+            .get(url("http", server.config.manager_address.clone(), ""))
             .send()
             .await
             .inspect_err(|e| eprintln!("{}", e))
@@ -57,7 +65,7 @@ mod tests {
     }
     #[tokio::test]
     async fn can_create_game() {
-        let server = GameServer::new().await;
+        let server = GameServer::new(make_config().await).await;
 
         // POST game
         let request = CreateGameRequest {
@@ -66,7 +74,11 @@ mod tests {
         };
         let client = Client::new();
         let response = client
-            .post(url("http", server.manager_address.clone(), "create_game"))
+            .post(url(
+                "http",
+                server.config.manager_address.clone(),
+                "create_game",
+            ))
             .json(&request)
             .send()
             .await
@@ -82,7 +94,7 @@ mod tests {
         // GET game
         let get_url = url(
             "http",
-            server.manager_address.clone(),
+            server.config.manager_address.clone(),
             format!("game/{}", &game_id.to_string()),
         );
         let response = client
@@ -104,7 +116,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_game() {
-        let server = GameServer::new().await;
+        let server = GameServer::new(make_config().await).await;
         let file_path = env!("CARGO_MANIFEST_DIR").to_string() + "/test/data/full_game.json";
         let ids = [Id::new(), Id::new()];
         let replacements = vec![("user1", ids[0]), ("user2", ids[1])];
@@ -117,15 +129,15 @@ mod tests {
         let address_lookup = HashMap::from([
             (
                 "user1".to_string(),
-                ServerAddress::WebSocket(url("ws", server.socket_address.clone(), "")),
+                ServerAddress::WebSocket(url("ws", server.config.socket_address.clone(), "")),
             ),
             (
                 "user2".to_string(),
-                ServerAddress::WebSocket(url("ws", server.socket_address.clone(), "")),
+                ServerAddress::WebSocket(url("ws", server.config.socket_address.clone(), "")),
             ),
             (
                 "rest".to_string(),
-                ServerAddress::RestApi(url("http", server.manager_address.clone(), "")),
+                ServerAddress::RestApi(url("http", server.config.manager_address.clone(), "")),
             ),
         ]);
         test_case.run(address_lookup).await;

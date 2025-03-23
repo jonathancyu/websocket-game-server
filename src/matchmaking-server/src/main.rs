@@ -1,6 +1,5 @@
 use common::utility::create_shutdown_channel;
-use matchmaking_server::entrypoint;
-use matchmaking_server::service::matchmaking::MatchmakingConfig;
+use matchmaking_server::entrypoint::{self, MatchmakingConfig};
 use tracing::Level;
 
 #[tokio::main]
@@ -29,7 +28,7 @@ mod tests {
         test::{ServerAddress, TestCase},
     };
     use entrypoint::MatchmakingServer;
-    use game_server::entrypoint::GameServer;
+    use game_server::entrypoint::{GameServer, GameServerConfig};
     use matchmaking_server::model::messages::{ClientRequest, ClientResponse};
     use rusqlite::Connection;
     use std::collections::HashMap;
@@ -84,24 +83,25 @@ mod tests {
 
     #[tokio::test]
     async fn run_game() {
-        let rest_address = random_address().await;
-        let socket_address = random_address().await;
-        let game_server_url = "http://0.0.0.0:8082".to_owned();
-
         // Initialize test database with schema
         let db_url = init_test_db().await;
-        debug!("Using test database at: {}", db_url);
 
-        let config = MatchmakingConfig {
-            socket_address: socket_address.clone(),
-            rest_address: rest_address.clone(),
-            game_server_url: game_server_url.clone(),
+        // Stand up servers
+        let gs_config = GameServerConfig {
+            manager_address: random_address().await.to_string(),
+            socket_address: random_address().await.to_string(),
+        };
+        let mm_config = MatchmakingConfig {
+            socket_address: random_address().await,
+            rest_address: random_address().await,
+            game_server_url: gs_config.manager_address.clone(),
             db_url,
         };
+        let mm_server = MatchmakingServer::new(mm_config).await;
 
-        let mm_server = MatchmakingServer::new(config).await;
-        let game_server = GameServer::new().await;
-        // let game_server = TestG
+        let game_server = GameServer::new(gs_config.clone()).await;
+
+        // Set up test case
         let file_path =
             env!("CARGO_MANIFEST_DIR").to_string() + "/test/data/queue_multiple_times.json";
         let ids = [Id::new(), Id::new()];
@@ -109,7 +109,10 @@ mod tests {
             ("user1".to_string(), ids[0].to_string()),
             ("user2".to_string(), ids[1].to_string()),
             ("game_id".to_string(), Id::new().to_string()),
-            ("server_address".to_string(), game_server_url),
+            (
+                "server_address".to_string(),
+                gs_config.manager_address.clone(),
+            ),
         ];
         let test_case = TestCase::<ClientRequest, ClientResponse, DummyType, DummyType>::load(
             file_path,
@@ -119,17 +122,18 @@ mod tests {
         let address_lookup = HashMap::from([
             (
                 "user1".to_string(),
-                ServerAddress::WebSocket(url("ws", mm_server.socket_address.clone(), "")),
+                ServerAddress::WebSocket(url("ws", mm_server.config.socket_address.clone(), "")),
             ),
             (
                 "user2".to_string(),
-                ServerAddress::WebSocket(url("ws", mm_server.socket_address.clone(), "")),
+                ServerAddress::WebSocket(url("ws", mm_server.config.socket_address.clone(), "")),
             ),
             (
                 "rest".to_string(),
-                ServerAddress::RestApi(url("http", mm_server.rest_address.clone(), "")),
+                ServerAddress::RestApi(url("http", mm_server.config.rest_address.clone(), "")),
             ),
         ]);
+
         test_case.run(address_lookup).await;
         mm_server.shutdown().await;
         game_server.shutdown().await;
