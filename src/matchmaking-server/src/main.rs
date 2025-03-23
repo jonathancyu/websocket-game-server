@@ -17,7 +17,7 @@ async fn main() {
         socket_address: "0.0.0.0:3001".to_owned(),
         rest_address: "0.0.0.0:8081".to_owned(),
         game_server_url: "http://0.0.0.0:8082".to_owned(),
-        db_file: "matchmaking.db".to_owned(),
+        db_url: "matchmaking.db".to_owned(),
     };
     let shutdown_receiver = create_shutdown_channel().await;
     serve(config, shutdown_receiver, None).await;
@@ -73,8 +73,11 @@ mod tests {
         test::{ServerAddress, TestCase},
     };
     use matchmaking_server::model::messages::{ClientRequest, ClientResponse};
+    use rusqlite::Connection;
     use std::collections::HashMap;
+    use std::fs;
     use tokio::{net::UdpSocket, sync::broadcast};
+    use tracing::debug;
 
     use super::*;
     struct TestServer {
@@ -137,17 +140,43 @@ mod tests {
         )
     }
 
+    async fn init_test_db() -> String {
+        // Use a temporary file instead of :memory: so it can be shared between connections
+        let temp_dir = std::env::temp_dir();
+        let db_path = temp_dir.join(format!("matchmaking_test_{}.db", Id::new()));
+        let db_url = db_path.to_str().unwrap().to_string();
+
+        let conn = Connection::open(&db_url).expect("Failed to create test database");
+
+        // Read and execute the SQL schema
+        let schema = fs::read_to_string(
+            env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql/create_tables.sql",
+        )
+        .expect("Failed to read schema file");
+
+        conn.execute_batch(&schema)
+            .expect("Failed to initialize database schema");
+
+        db_url
+    }
+
     #[tokio::test]
     async fn run_game() {
         let rest_address = random_address().await;
         let socket_address = random_address().await;
         let game_server_url = "http://0.0.0.0:8082".to_owned();
+
+        // Initialize test database with schema
+        let db_url = init_test_db().await;
+        debug!("Using test database at: {}", db_url);
+
         let config = MatchmakingConfig {
             socket_address: socket_address.clone(),
             rest_address: rest_address.clone(),
             game_server_url: game_server_url.clone(),
-            db_file: "matchmaking.db".to_owned(),
+            db_url,
         };
+
         let server = TestServer::new(config).await;
         let file_path =
             env!("CARGO_MANIFEST_DIR").to_string() + "/test/data/queue_multiple_times.json";

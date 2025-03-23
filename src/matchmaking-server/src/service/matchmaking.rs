@@ -36,7 +36,7 @@ pub struct Game {
 pub struct MatchmakingConfig {
     pub socket_address: String,
     pub rest_address: String,
-    pub db_file: String,
+    pub db_url: String,
     pub game_server_url: String,
 }
 
@@ -137,12 +137,8 @@ impl MatchmakingService {
         let forward_socket_shutdown_receiver = shutdown_receiver.resubscribe();
         let socket_state = state.clone();
         let forward_socket_handle = tokio::spawn(async move {
-            Self::forward_socket_thread(
-                socket_state,
-                forward_socket_shutdown_receiver,
-                ws_receiver,
-            )
-            .await
+            Self::forward_socket_thread(socket_state, forward_socket_shutdown_receiver, ws_receiver)
+                .await
         });
 
         // REST thread
@@ -219,7 +215,7 @@ impl MatchmakingService {
         State(state): State<Arc<Mutex<MatchmakingServiceState>>>,
         Json(request): Json<PostGameResultsRequest>,
     ) -> Response {
-        let db_path = state.lock().await.config.db_file.clone();
+        let db_path = state.lock().await.config.db_url.clone();
         match Self::write_game_result_and_update_elo(db_path, request).await {
             Ok(_) => StatusCode::CREATED.into_response(),
             Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
@@ -258,7 +254,7 @@ impl MatchmakingService {
             "Current working directory: {:?}",
             std::env::current_dir().unwrap_or_default()
         );
-        let connection = Connection::open(&config.db_file)?; // TODO: somehow DI this param. pass in as state?
+        let connection = Connection::open(&config.db_url)?;
         connection.execute(
             "INSERT INTO match (
                 id,
