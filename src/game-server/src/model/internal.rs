@@ -1,13 +1,9 @@
 use common::{
     message::game_server::{ClientRequest, ClientResponse},
-    model::{
-        game::{Move, Outcome},
-        messages::Id,
-    },
+    model::messages::Id,
 };
 use tokio::sync::mpsc::Sender;
 
-use serde::{Deserialize, Serialize};
 
 // Types
 #[derive(Clone, Debug)]

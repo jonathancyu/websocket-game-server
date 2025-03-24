@@ -5,7 +5,7 @@ use common::websocket::WebsocketHandler;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use tracing::{info, Level};
+use tracing::Level;
 
 #[derive(Clone)]
 pub struct GameServerConfig {

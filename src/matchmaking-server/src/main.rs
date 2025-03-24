@@ -34,7 +34,7 @@ mod tests {
     use std::collections::HashMap;
     use std::fs;
     use tokio::net::UdpSocket;
-    use tracing::debug;
+    
 
     use super::*;
     async fn random_address() -> String {

@@ -8,7 +8,6 @@ use axum::{
     Json, Router,
 };
 use common::model::messages::{CreateGameRequest, CreateGameResponse, GetGameResponse, Id};
-use common::reqwest::Url;
 use tokio::{
     sync::{
         broadcast,

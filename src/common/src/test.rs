@@ -10,11 +10,10 @@ use serde_json::json;
 use tokio::{net::TcpStream, time::timeout};
 use tokio_tungstenite::{
     connect_async,
-    tungstenite::{http::response, Message},
+    tungstenite::Message,
     MaybeTlsStream, WebSocketStream,
 };
 use tracing::{debug, info};
-use uuid::Uuid;
 
 use crate::model::messages::{Id, OpenSocketRequest};
 
