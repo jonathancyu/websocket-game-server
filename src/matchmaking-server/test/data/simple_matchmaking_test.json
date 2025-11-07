@@ -1,0 +1,29 @@
+{
+  "sequence": [
+    {
+      "type": "Comment",
+      "text": "Simple matchmaking test - join queue and receive confirmation"
+    },
+    {
+      "type": "SocketOpen",
+      "name": "user1",
+      "user_id": "${user1}"
+    },
+    {
+      "type": "SocketSend",
+      "name": "user1",
+      "request": {
+        "type": "JoinQueue"
+      }
+    },
+    {
+      "type": "SocketReceive",
+      "name": "user1",
+      "response": {
+        "type": "JoinedQueue"
+      }
+    }
+  ]
+}
+
+

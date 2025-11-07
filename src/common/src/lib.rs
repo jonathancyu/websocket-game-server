@@ -1,3 +1,4 @@
+pub mod elo;
 pub mod message;
 pub mod model;
 pub mod utility;

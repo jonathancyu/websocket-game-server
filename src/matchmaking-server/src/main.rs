@@ -34,7 +34,7 @@ mod tests {
     use std::collections::HashMap;
     use std::fs;
     use tokio::net::UdpSocket;
-    
+
 
     use super::*;
     async fn random_address() -> String {
@@ -138,5 +138,42 @@ mod tests {
         test_case.run(address_lookup).await;
         mm_server.shutdown().await;
         game_server.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn simple_matchmaking_test() {
+        // Initialize test database with schema
+        let db_url = init_test_db().await;
+
+        // Stand up matchmaking server
+        let mm_config = MatchmakingConfig {
+            socket_address: random_address().await,
+            rest_address: random_address().await,
+            game_server_url: url("http", random_address().await, ""),
+            db_url,
+        };
+        let mm_server = MatchmakingServer::new(mm_config).await;
+
+        // Set up test case
+        let file_path =
+            env!("CARGO_MANIFEST_DIR").to_string() + "/test/data/simple_matchmaking_test.json";
+        let user_id = Id::new();
+        let replacements: Vec<(String, String)> = vec![
+            ("user1".to_string(), user_id.to_string()),
+        ];
+        let test_case = TestCase::<ClientRequest, ClientResponse, DummyType, DummyType>::load(
+            file_path,
+            replacements,
+        );
+
+        let address_lookup = HashMap::from([
+            (
+                "user1".to_string(),
+                ServerAddress::WebSocket(url("ws", mm_server.config.socket_address.clone(), "")),
+            ),
+        ]);
+
+        test_case.run(address_lookup).await;
+        mm_server.shutdown().await;
     }
 }

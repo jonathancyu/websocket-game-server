@@ -12,6 +12,7 @@ use axum::{
     Json, Router,
 };
 use common::{
+    elo,
     model::messages::{CreateGameRequest, CreateGameResponse, Id, PostGameResultsRequest},
     reqwest::{Client, Url},
 };
@@ -207,7 +208,7 @@ impl MatchmakingService {
         request: PostGameResultsRequest,
     ) -> Result<()> {
         // Insert results into db
-        let connection = Connection::open(db_path)?;
+        let connection = Connection::open(&db_path)?;
         connection.execute(
             "INSERT INTO match_results (id, player_1_score, player_2_score) VALUES (?1, ?2, ?3)",
             (
@@ -217,8 +218,69 @@ impl MatchmakingService {
             ),
         )?;
 
-        // Update ELO
-        // TODO: impl
+        // Get or create players and their ELO ratings
+        let player_1_id = request.players.0.to_string();
+        let player_2_id = request.players.1.to_string();
+
+        // Ensure players exist in the players table
+        connection.execute(
+            "INSERT OR IGNORE INTO players (id, elo) VALUES (?1, ?2)",
+            (&player_1_id, elo::default_rating()),
+        )?;
+        connection.execute(
+            "INSERT OR IGNORE INTO players (id, elo) VALUES (?1, ?2)",
+            (&player_2_id, elo::default_rating()),
+        )?;
+
+        // Get current ELO ratings
+        let player_1_elo: i32 = connection.query_row(
+            "SELECT elo FROM players WHERE id = ?1",
+            [&player_1_id],
+            |row| row.get(0),
+        )?;
+
+        let player_2_elo: i32 = connection.query_row(
+            "SELECT elo FROM players WHERE id = ?1",
+            [&player_2_id],
+            |row| row.get(0),
+        )?;
+
+        // Determine actual scores (1.0 for win, 0.5 for draw, 0.0 for loss)
+        let (player_1_score, player_2_score) = match request.games_won {
+            (p1_score, p2_score) if p1_score > p2_score => (1.0, 0.0),
+            (p1_score, p2_score) if p1_score < p2_score => (0.0, 1.0),
+            _ => (0.5, 0.5), // Draw
+        };
+
+        // Calculate new ELO ratings
+        let new_player_1_elo = elo::calculate_new_rating(
+            player_1_elo,
+            player_2_elo,
+            player_1_score,
+            None,
+        );
+        let new_player_2_elo = elo::calculate_new_rating(
+            player_2_elo,
+            player_1_elo,
+            player_2_score,
+            None,
+        );
+
+        // Update ELO ratings in database
+        connection.execute(
+            "UPDATE players SET elo = ?1 WHERE id = ?2",
+            (new_player_1_elo, &player_1_id),
+        )?;
+        connection.execute(
+            "UPDATE players SET elo = ?1 WHERE id = ?2",
+            (new_player_2_elo, &player_2_id),
+        )?;
+
+        info!(
+            "Updated ELO: Player {}: {} -> {}, Player {}: {} -> {}",
+            player_1_id, player_1_elo, new_player_1_elo,
+            player_2_id, player_2_elo, new_player_2_elo
+        );
 
         Ok(())
     }
