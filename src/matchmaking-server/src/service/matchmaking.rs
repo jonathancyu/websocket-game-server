@@ -29,6 +29,13 @@ use crate::{
     model::messages::{ClientResponse, MatchmakingRequest, Player},
 };
 
+/// A player in the matchmaking queue with their ELO rating
+#[derive(Clone, Debug)]
+struct QueuedPlayer {
+    player: Player,
+    elo: i32,
+}
+
 pub struct Game {
     pub id: Id,
     pub player1: Player,
@@ -38,19 +45,19 @@ pub struct Game {
 
 struct MatchmakingServiceState {
     pub config: MatchmakingConfig,
-    pub queue: VecDeque<Player>,
+    pub queue: VecDeque<QueuedPlayer>,
     pub users_in_queue: HashSet<Id>,
 }
 
 impl MatchmakingServiceState {
-    pub fn add_user(&mut self, player: Player) {
-        let user_id = player.clone().id;
+    pub fn add_user(&mut self, queued_player: QueuedPlayer) {
+        let user_id = queued_player.player.id;
         if self.users_in_queue.contains(&user_id) {
             warn!("User {:?} was already in the queue", user_id);
             return;
         }
-        info!("Adding user {:?} to queue", user_id);
-        self.queue.push_back(player);
+        info!("Adding user {:?} to queue with ELO {}", user_id, queued_player.elo);
+        self.queue.push_back(queued_player);
         self.users_in_queue.insert(user_id);
     }
 }
@@ -59,35 +66,62 @@ pub struct MatchmakingService {}
 
 type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 
-// TODO: this is a controller. Separate threads into their own "services"? 🤔
+    // TODO: this is a controller. Separate threads into their own "services"? 🤔
 impl MatchmakingService {
+    // ELO matchmaking threshold - players within this rating difference can be matched
+    const ELO_MATCH_THRESHOLD: i32 = 200;
+    // Maximum ELO difference to consider (expands if no matches found)
+    const MAX_ELO_DIFF: i32 = 500;
+
     // TODO: How can we reduce the size of this state?
     async fn read_queue(state: Arc<Mutex<MatchmakingServiceState>>) -> Result<()> {
         let mut state = state.lock().await;
-        let mut unmatched_players: VecDeque<Player> = VecDeque::new();
-        let mut matches: Vec<(Player, Player)> = vec![];
+        let mut unmatched_players: VecDeque<QueuedPlayer> = VecDeque::new();
+        let mut matches: Vec<(QueuedPlayer, QueuedPlayer)> = vec![];
+
+        // ELO-based matching: try to match players with similar ratings
         while let Some(player) = state.queue.pop_front() {
-            if let Some(enemy) = unmatched_players.pop_front() {
-                info!("Matched {:?} and {:?}", player.id, enemy.id);
-                matches.push((player, enemy));
-                continue;
+            // Find the best match (closest ELO rating within threshold)
+            let mut best_match_idx: Option<usize> = None;
+            let mut best_elo_diff = Self::MAX_ELO_DIFF;
+
+            for (idx, candidate) in unmatched_players.iter().enumerate() {
+                let elo_diff = (player.elo - candidate.elo).abs();
+                if elo_diff <= Self::ELO_MATCH_THRESHOLD && elo_diff < best_elo_diff {
+                    best_match_idx = Some(idx);
+                    best_elo_diff = elo_diff;
+                }
             }
-            unmatched_players.push_back(player);
+
+            if let Some(idx) = best_match_idx {
+                let matched_player = unmatched_players.remove(idx).unwrap();
+                info!(
+                    "Matched {:?} (ELO {}) and {:?} (ELO {}) with ELO diff {}",
+                    player.player.id, player.elo,
+                    matched_player.player.id, matched_player.elo,
+                    best_elo_diff
+                );
+                matches.push((player, matched_player));
+            } else {
+                // No good match found, add to unmatched queue
+                unmatched_players.push_back(player);
+            }
         }
+
         for (player1, player2) in matches.iter() {
-            state.users_in_queue.remove(&player1.id);
-            state.users_in_queue.remove(&player2.id);
+            state.users_in_queue.remove(&player1.player.id);
+            state.users_in_queue.remove(&player2.player.id);
 
             // Create game
-            let response = Self::create_game(&state.config, (player1.id, player2.id)).await?;
+            let response = Self::create_game(&state.config, (player1.player.id, player2.player.id)).await?;
 
             // Notify players
             let message = ClientResponse::MatchFound {
                 game_id: response.game_id,
                 server_address: response.address,
             };
-            player1.sender.send(message.clone()).await?;
-            player2.sender.send(message.clone()).await?;
+            player1.player.sender.send(message.clone()).await?;
+            player2.player.sender.send(message.clone()).await?;
         }
         state.queue = unmatched_players;
 
@@ -326,11 +360,34 @@ impl MatchmakingService {
             .await?)
     }
 
+    async fn load_player_elo(db_path: &str, player_id: &Id) -> Result<i32> {
+        let connection = Connection::open(db_path)?;
+        let player_id_str = player_id.to_string();
+
+        // Try to get existing ELO rating, or use default if player doesn't exist
+        let elo: i32 = connection.query_row(
+            "SELECT elo FROM players WHERE id = ?1",
+            [&player_id_str],
+            |row| row.get(0),
+        ).unwrap_or_else(|_| {
+            // Player doesn't exist, create them with default ELO
+            let default_elo = elo::default_rating();
+            if let Err(e) = connection.execute(
+                "INSERT INTO players (id, elo) VALUES (?1, ?2)",
+                (&player_id_str, default_elo),
+            ) {
+                warn!("Failed to create player {} in database: {}", player_id_str, e);
+            }
+            default_elo
+        });
+
+        Ok(elo)
+    }
+
     async fn handle_message(
         state: Arc<Mutex<MatchmakingServiceState>>,
         message: Option<MatchmakingRequest>,
     ) {
-        let mut state = state.lock().await;
         debug!("msg: {:?}", message);
         let Some(message) = message else {
             info!("Got empty message");
@@ -342,31 +399,57 @@ impl MatchmakingService {
                 if sender.is_closed() {
                     warn!("Sender {:?} is closed!", player.id);
                 }
-                state.add_user(player);
+
+                // Load ELO rating from database (release lock before async DB operation)
+                let db_path = {
+                    let state_guard = state.lock().await;
+                    state_guard.config.db_url.clone()
+                };
+                let player_id = player.id;
+
+                let elo = match Self::load_player_elo(&db_path, &player_id).await {
+                    Ok(rating) => rating,
+                    Err(e) => {
+                        error!("Failed to load ELO for player {:?}: {}", player_id, e);
+                        elo::default_rating() // Fallback to default
+                    }
+                };
+
+                let mut state_guard = state.lock().await;
+                let queued_player = QueuedPlayer {
+                    player,
+                    elo,
+                };
+                state_guard.add_user(queued_player);
+
                 let result = sender.send(ClientResponse::JoinedQueue).await;
                 if let Err(err) = result {
                     error!("Got error when sending MatchmakingResponse: {}", err);
                 }
             }
-            MatchmakingRequest::LeaveQueue(user_id) => match state.users_in_queue.get(&user_id) {
-                Some(_) => {
-                    let position = state
-                        .queue
-                        .iter()
-                        .enumerate()
-                        .find(|(_, user)| user.id == user_id);
-                    if let Some((position, user)) = position {
-                        info!("Removing user {:?} from queue", user.id);
-                        state.queue.remove(position);
-                    } else {
-                        warn!(
-                            "User {:?} was in users_in_queue but not in actual queue",
-                            user_id
-                        );
+            MatchmakingRequest::LeaveQueue(user_id) => {
+                let mut state_guard = state.lock().await;
+                match state_guard.users_in_queue.get(&user_id) {
+                    Some(_) => {
+                        let position = state_guard
+                            .queue
+                            .iter()
+                            .enumerate()
+                            .find(|(_, queued_player)| queued_player.player.id == user_id);
+                        if let Some((position, _)) = position {
+                            info!("Removing user {:?} from queue", user_id);
+                            state_guard.queue.remove(position);
+                            state_guard.users_in_queue.remove(&user_id);
+                        } else {
+                            warn!(
+                                "User {:?} was in users_in_queue but not in actual queue",
+                                user_id
+                            );
+                        }
                     }
+                    None => warn!("User {:?} not in queue", user_id),
                 }
-                None => warn!("User {:?} not in queue", user_id),
-            },
+            }
         };
     }
 }
