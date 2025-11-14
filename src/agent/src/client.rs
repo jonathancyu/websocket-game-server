@@ -1,4 +1,4 @@
-use common::model::game::Move;
+use common::model::game::{Move, Outcome};
 
 use crate::strategy::{Round, Strategy};
 
@@ -17,9 +17,23 @@ impl Client {
         }
     }
 
-    fn play(&mut self) -> Move {
+    pub fn play(&mut self) -> Move {
         let next_move = self.strategy.make_move(&self.history);
         self.last_move = Some(next_move.clone());
         next_move
+    }
+
+    pub fn record_round(&mut self, their_move: Move, outcome: Outcome) {
+        if let Some(my_move) = self.last_move.take() {
+            self.history.push(Round {
+                my_move,
+                their_move,
+                outcome,
+            });
+        }
+    }
+
+    pub fn strategy_name(&self) -> &'static str {
+        self.strategy.name()
     }
 }
