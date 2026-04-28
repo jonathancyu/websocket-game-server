@@ -6,6 +6,8 @@ import { GameRequest, GameResponse } from "./requests";
 import { Move, Result } from "./model";
 import { match } from "ts-pattern";
 import { Trophy } from "lucide-react";
+import { Skin, DEFAULT_SKIN } from "./skins";
+import SkinSelector from "./SkinSelector";
 
 // Component
 export type GameComponentProps = {
@@ -36,6 +38,7 @@ export default function Game({
   const [gameState, setGameState] = useState<GameState>({ type: "Connecting" });
   const [myScore, setMyScore] = useState<number>(0);
   const [opponentScore, setOpponentScore] = useState<number>(0);
+  const [skin, setSkin] = useState<Skin>(DEFAULT_SKIN);
 
   // Create socket listener
   useEffect(() => {
@@ -102,7 +105,7 @@ export default function Game({
                 ? "You lost this round."
                 : "This round was a draw."}
           </div>
-          <div>Opponent played: {other_move}</div>
+          <div>Opponent played: {skin.moves[other_move].icon} {skin.moves[other_move].label}</div>
           <div className="mt-2">
             Score: You {myScore} - {opponentScore} Opponent
           </div>
@@ -134,20 +137,25 @@ export default function Game({
 
   return (
     <div className="flex-col gap-4 justify-center">
+      <SkinSelector selected={skin} onChange={setSkin} />
       <GameStateView />
-      <div>
+      <div className="flex gap-2 mt-4">
         {(gameState.type === "Connected" ||
           gameState.type === "PendingMove" ||
           gameState.type === "RoundResult") &&
-          Object.values(Move).map((move) => (
-            <button
-              key={move}
-              onClick={() => makeMove(move)}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-            >
-              {move.charAt(0).toUpperCase() + move.slice(1)}
-            </button>
-          ))}
+          Object.values(Move).map((move) => {
+            const { label, icon } = skin.moves[move];
+            return (
+              <button
+                key={move}
+                onClick={() => makeMove(move)}
+                className="px-4 py-3 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors flex flex-col items-center gap-1"
+              >
+                <span className="text-2xl">{icon}</span>
+                <span className="text-sm">{label}</span>
+              </button>
+            );
+          })}
       </div>
     </div>
   );
