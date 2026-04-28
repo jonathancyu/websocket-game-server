@@ -7,12 +7,12 @@ import { Move, Result } from "./model";
 import { match } from "ts-pattern";
 import { Trophy } from "lucide-react";
 import { Skin, DEFAULT_SKIN } from "./skins";
-import SkinSelector from "./SkinSelector";
 
 // Component
 export type GameComponentProps = {
   userId: string;
   serverAddress: string;
+  skin?: Skin;
   endGameAction: (matchResult: Result) => void;
 };
 
@@ -32,13 +32,14 @@ type GameState =
 export default function Game({
   userId,
   serverAddress,
+  skin: skinProp,
   endGameAction,
 }: GameComponentProps) {
   const socket = useWebSocket<GameRequest, GameResponse>(userId);
   const [gameState, setGameState] = useState<GameState>({ type: "Connecting" });
   const [myScore, setMyScore] = useState<number>(0);
   const [opponentScore, setOpponentScore] = useState<number>(0);
-  const [skin, setSkin] = useState<Skin>(DEFAULT_SKIN);
+  const skin = skinProp ?? DEFAULT_SKIN;
 
   // Create socket listener
   useEffect(() => {
@@ -137,7 +138,6 @@ export default function Game({
 
   return (
     <div className="flex-col gap-4 justify-center">
-      <SkinSelector selected={skin} onChange={setSkin} />
       <GameStateView />
       <div className="flex gap-2 mt-4">
         {(gameState.type === "Connected" ||
