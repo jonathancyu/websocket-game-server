@@ -3,10 +3,12 @@ import useWebSocket, { ConnectionStatus } from "../hooks/socket";
 import { match } from "ts-pattern";
 import { MatchmakingRequest } from "./requests";
 import { MatchmakingResponse } from "./responses";
+import { Skin } from "../shared/skins";
 
 type QueueProps = {
   userId: string;
   joinGame: (serverAddress: string) => void;
+  skin: Skin;
 };
 
 type QueueState =
@@ -14,7 +16,7 @@ type QueueState =
   | { type: "Connecting" }
   | { type: "NotInQueue" };
 
-export default function Queue({ userId, joinGame }: QueueProps) {
+export default function Queue({ userId, joinGame, skin }: QueueProps) {
   const queue = useWebSocket<MatchmakingRequest, MatchmakingResponse>(userId);
   const [queueState, setQueueState] = useState<QueueState>({
     type: "NotInQueue",
@@ -85,7 +87,7 @@ export default function Queue({ userId, joinGame }: QueueProps) {
     return match(queueState)
       .with({ type: "NotInQueue" }, () => (
         <button
-          className="px-6 py-2 rounded-md bg-blue-50 text-black border-2 border-blue-200 hover:bg-blue-100 transition-colors duration-200 font-medium shadow-sm"
+          className={`px-6 py-2 rounded-md border-2 transition-colors duration-200 font-medium shadow-sm text-white ${skin.buttonClass} ${skin.buttonHoverClass}`}
           onClick={joinQueue}
         >
           Join Queue
@@ -96,7 +98,7 @@ export default function Queue({ userId, joinGame }: QueueProps) {
         <div className="flex flex-col items-center gap-4">
           {timer()}
           <button
-            className="px-6 py-2 rounded-md bg-red-50 text-red-700 border-2 border-red-200 hover:bg-red-100 transition-colors duration-200 font-medium shadow-sm"
+            className={`px-6 py-2 rounded-md border-2 transition-colors duration-200 font-medium shadow-sm ${skin.surfaceClass} ${skin.textClass} ${skin.borderClass} hover:brightness-95`}
             onClick={leaveQueue}
           >
             Leave Queue

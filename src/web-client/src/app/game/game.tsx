@@ -1,17 +1,19 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import useWebSocket, { ConnectionStatus } from "../hooks/socket";
 import { GameRequest, GameResponse } from "./requests";
 import { Move, Result } from "./model";
 import { match } from "ts-pattern";
 import { Trophy } from "lucide-react";
+import { Skin } from "../shared/skins";
 
 // Component
 export type GameComponentProps = {
   userId: string;
   serverAddress: string;
   endGameAction: (matchResult: Result) => void;
+  skin: Skin;
 };
 
 type GameState =
@@ -31,6 +33,7 @@ export default function Game({
   userId,
   serverAddress,
   endGameAction,
+  skin,
 }: GameComponentProps) {
   const socket = useWebSocket<GameRequest, GameResponse>(userId);
   const [gameState, setGameState] = useState<GameState>({ type: "Connecting" });
@@ -85,16 +88,16 @@ export default function Game({
         <div className="text-yellow-500">Connecting to game server...</div>
       ))
       .with({ type: "Connected" }, () => (
-        <div className="text-green-500">Connected! Ready to play.</div>
+        <div className={skin.textClass}>Connected! Ready to play.</div>
       ))
       .with({ type: "PendingMove" }, () => (
-        <div className="text-blue-500">Your turn! Make a move.</div>
+        <div className={skin.textClass}>Your turn! Make a move.</div>
       ))
       .with({ type: "MoveSent" }, () => (
         <div className="text-gray-500">Move sent, waiting for opponent...</div>
       ))
       .with({ type: "RoundResult" }, ({ result, other_move }) => (
-        <div className="p-4 border rounded">
+        <div className={`p-4 border rounded-lg ${skin.surfaceClass} ${skin.borderClass}`}>
           <div className="text-xl font-bold mb-2">
             {result === Result.Win
               ? "You won this round!"
@@ -109,7 +112,7 @@ export default function Game({
         </div>
       ))
       .with({ type: "MatchResult" }, ({ result, wins, total }) => (
-        <div className="p-4 border rounded bg-gray-100">
+        <div className={`p-4 border rounded-lg ${skin.surfaceClass} ${skin.borderClass}`}>
           <div className="flex items-center justify-center mb-4">
             {result === Result.Win && (
               <Trophy className="text-yellow-500 mr-2" size={24} />
@@ -135,7 +138,7 @@ export default function Game({
   return (
     <div className="flex-col gap-4 justify-center">
       <GameStateView />
-      <div>
+      <div className="mt-4 flex flex-wrap gap-3">
         {(gameState.type === "Connected" ||
           gameState.type === "PendingMove" ||
           gameState.type === "RoundResult") &&
@@ -143,7 +146,7 @@ export default function Game({
             <button
               key={move}
               onClick={() => makeMove(move)}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+              className={`px-4 py-2 rounded text-white transition-colors ${skin.buttonClass} ${skin.buttonHoverClass}`}
             >
               {move.charAt(0).toUpperCase() + move.slice(1)}
             </button>

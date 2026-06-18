@@ -61,11 +61,11 @@ export class ClientList extends Component<ClientListProps, ClientListState> {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-4">
           {this.state.clientIds.map((id, index) => (
             <div
-              key={index}
+              key={id}
               className="bg-slate-200 rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
             >
               <h2 className="text-lg font-semibold mb-2 text-gray-700">
-                Client {index}
+                Client {index + 1}
               </h2>
               <Client id={id} />
             </div>
