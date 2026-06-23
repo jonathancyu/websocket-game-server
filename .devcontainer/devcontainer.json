@@ -1,0 +1,9 @@
+{
+  "name": "websocket-game-server",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/rust": {},
+    "ghcr.io/devcontainers/features/node": {}
+  },
+  "forwardPorts": [3030, 3001, 3002, 8081, 8082]
+}

@@ -1,0 +1,51 @@
+tasks:
+  install-dependencies:
+    name: Install dependencies
+    command: |
+      sudo apt-get update
+      sudo apt-get install -y libsqlite3-dev pkg-config
+      corepack enable
+      corepack prepare pnpm@8.15.9 --activate
+      cargo fetch --locked
+      cd src/web-client
+      pnpm install --frozen-lockfile
+    triggeredBy:
+      - manual
+      - postDevcontainerStart
+      - prebuild
+
+  build:
+    name: Build
+    command: |
+      cargo build --workspace --locked
+      cd src/web-client
+      corepack prepare pnpm@8.15.9 --activate
+      pnpm build
+    dependsOn:
+      - install-dependencies
+    triggeredBy:
+      - manual
+
+  test:
+    name: Test
+    command: cargo test --workspace --locked
+    dependsOn:
+      - install-dependencies
+    triggeredBy:
+      - manual
+
+services:
+  web-client:
+    name: Web client
+    commands:
+      start: |
+        corepack enable
+        corepack prepare pnpm@8.15.9 --activate
+        cd src/web-client
+        pnpm install --frozen-lockfile
+        ona environment port open 3030 --dont-wait --admission creator_only --name web-client
+        pnpm exec next dev -p 3030 --hostname 0.0.0.0
+      ready: curl -sf -o /dev/null http://localhost:3030
+    triggeredBy:
+      - manual
+      - postEnvironmentStart
