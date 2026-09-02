@@ -6,7 +6,10 @@
       "command": "python3 -m http.server 18082 --bind 0.0.0.0"
     }
   ],
-  "ports": {
-    "preview-standby-e2e": 18082
-  }
+  "ports": [
+    {
+      "name": "preview-standby-e2e",
+      "port": 18082
+    }
+  ]
 }
