@@ -55,6 +55,7 @@ pub async fn create_shutdown_channel() -> broadcast::Receiver<()> {
     shutdown_receiver
 }
 
+/// Binds an ephemeral UDP port and returns its local address as a string.
 pub async fn random_address() -> String {
     let socket = UdpSocket::bind("0.0.0.0:0")
         .await
@@ -64,6 +65,7 @@ pub async fn random_address() -> String {
         .expect("Failed to unwrap local address")
         .to_string()
 }
+/// Builds a URL of the form `protocol://base_url/endpoint`.
 pub fn url<A, B, C>(protocol: A, base_url: B, endpoint: C) -> String
 where
     A: ToString,

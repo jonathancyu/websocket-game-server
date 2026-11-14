@@ -7,7 +7,10 @@ export default function Home() {
         <h1 className="text-3xl font-bold text-white mb-8">
           Matchmaking Tester
         </h1>
-        <ClientList/>
+        <p className="text-stone-400 mb-6">
+          Spin up clients, join the queue, and watch matches form in real time.
+        </p>
+        <ClientList />
       </div>
     </div>
   );

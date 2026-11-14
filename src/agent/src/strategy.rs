@@ -1,10 +1,12 @@
 use common::model::game::{Move, Outcome};
 
+/// One completed round, kept so strategies can inspect history.
 pub struct Round {
     my_move: Move,
     their_move: Move,
     outcome: Outcome,
 }
+/// A policy that picks the next move given the history so far.
 pub trait Strategy {
     fn make_move(&self, history: &Vec<Round>) -> Move;
 }
@@ -29,7 +31,7 @@ impl Strategy for OnlyScissors {
     }
 }
 
-// Random
+// Random (TODO: currently always plays Rock; needs an RNG dependency)
 pub struct RandomMove {}
 impl Strategy for RandomMove {
     fn make_move(&self, _: &Vec<Round>) -> Move {
