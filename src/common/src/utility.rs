@@ -79,3 +79,23 @@ where
         endpoint.to_string()
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn url_joins_parts() {
+        assert_eq!(url("http", "localhost:8080", "games"), "http://localhost:8080/games");
+    }
+
+    #[test]
+    fn url_with_empty_endpoint_keeps_trailing_slash() {
+        assert_eq!(url("ws", "127.0.0.1:1", ""), "ws://127.0.0.1:1/");
+    }
+
+    #[test]
+    fn url_accepts_any_to_string() {
+        assert_eq!(url("http", "host", 42), "http://host/42");
+    }
+}

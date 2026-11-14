@@ -253,3 +253,23 @@ where
             .expect("Failed to send message");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn substitute_ids_replaces_every_uuid() {
+        let id = Id::new();
+        let text = r#"{"a":"123e4567-e89b-12d3-a456-426614174000","b":"00000000-0000-0000-0000-000000000000"}"#;
+        let out = substitute_ids(text, id);
+        assert_eq!(out.matches(&id.to_string()).count(), 2);
+        assert!(!out.contains("123e4567"));
+    }
+
+    #[test]
+    fn substitute_ids_leaves_other_text_untouched() {
+        let text = r#"{"name":"no ids here"}"#;
+        assert_eq!(substitute_ids(text, Id::new()), text);
+    }
+}
