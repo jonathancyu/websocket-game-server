@@ -55,6 +55,7 @@ pub async fn create_shutdown_channel() -> broadcast::Receiver<()> {
     shutdown_receiver
 }
 
+/// Binds an ephemeral UDP port and returns its local address as a string.
 pub async fn random_address() -> String {
     let socket = UdpSocket::bind("0.0.0.0:0")
         .await
@@ -64,6 +65,7 @@ pub async fn random_address() -> String {
         .expect("Failed to unwrap local address")
         .to_string()
 }
+/// Builds a URL of the form `protocol://base_url/endpoint`.
 pub fn url<A, B, C>(protocol: A, base_url: B, endpoint: C) -> String
 where
     A: ToString,
@@ -76,4 +78,24 @@ where
         base_url.to_string(),
         endpoint.to_string()
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn url_joins_parts() {
+        assert_eq!(url("http", "localhost:8080", "games"), "http://localhost:8080/games");
+    }
+
+    #[test]
+    fn url_with_empty_endpoint_keeps_trailing_slash() {
+        assert_eq!(url("ws", "127.0.0.1:1", ""), "ws://127.0.0.1:1/");
+    }
+
+    #[test]
+    fn url_accepts_any_to_string() {
+        assert_eq!(url("http", "host", 42), "http://host/42");
+    }
 }
