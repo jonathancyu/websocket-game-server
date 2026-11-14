@@ -3,7 +3,7 @@
 actor "User" as user
 participant "UI" as ui
 participant "Websocket Thread" as socket
-database "Mathmaking Thread" as mm
+database "Matchmaking Thread" as mm
 
 user -> ui : Join queue
 ui -> socket : Connect to socket

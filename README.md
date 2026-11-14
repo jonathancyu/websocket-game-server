@@ -1,6 +1,6 @@
 # Websocket game server
 
-This project was used to explore rust and web sockets.
+This project was used to explore Rust and WebSockets.
 ![Protocol sequence diagrams](https://github.com/jonathancyu/websocket-game-server/blob/main/docs/game_sequence.png)
 
 ## Roadmap
